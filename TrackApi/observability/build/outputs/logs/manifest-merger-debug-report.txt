@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml:6:1-7:12
+INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml:6:1-7:12
+	package
+		INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml:6:11-69
+uses-sdk
+INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml
+INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/wanghao/Desktop/claude code/trackApi1/observability/src/main/AndroidManifest.xml

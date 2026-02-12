@@ -6,7 +6,9 @@
       "Bash(/usr/libexec/java_home -V)",
       "Bash(/usr/bin/java -XshowSettings:properties -version)",
       "Bash(./gradlew --stop)",
-      "Bash(JAVA_HOME=/usr ./gradlew:*)"
+      "Bash(JAVA_HOME=/usr ./gradlew:*)",
+      "Bash(gradle wrapper:*)",
+      "Bash(java:*)"
     ]
   }
 }

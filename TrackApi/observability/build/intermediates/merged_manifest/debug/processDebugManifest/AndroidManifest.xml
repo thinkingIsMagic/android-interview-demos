@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    库模块的 AndroidManifest.xml
+    注意：库模块不需要 application 标签，也不需要 activity
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.trackapi.observability" >
+
+    <uses-sdk android:minSdkVersion="24" />
+
+</manifest>
