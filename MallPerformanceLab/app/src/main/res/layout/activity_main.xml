@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- 顶部控制栏 -->
+    <LinearLayout
+        android:id="@+id/controlPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#F5F5F5">
+
+        <TextView
+            android:id="@+id/tvMode"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="[BASELINE]"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:gravity="center_vertical" />
+
+        <Button
+            android:id="@+id/btnToggleMode"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="切换模式"
+            android:textSize="12sp"
+            android:minWidth="80dp" />
+
+        <Button
+            android:id="@+id/btnShowReport"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="报告"
+            android:textSize="12sp"
+            android:layout_marginStart="8dp"
+            android:minWidth="60dp" />
+
+        <Button
+            android:id="@+id/btnClear"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="清空"
+            android:textSize="12sp"
+            android:layout_marginStart="8dp"
+            android:minWidth="60dp" />
+
+    </LinearLayout>
+
+    <!-- 性能指标展示 -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/metricsPanel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp" />
+
+    </HorizontalScrollView>
+
+    <!-- 主内容区 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvMall"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="16dp" />
+
+    <!-- 加载更多 -->
+    <LinearLayout
+        android:id="@+id/loadMorePanel"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:layout_width="24dp"
+            android:layout_height="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="加载中..."
+            android:layout_marginStart="8dp" />
+
+    </LinearLayout>
+
+</LinearLayout>
