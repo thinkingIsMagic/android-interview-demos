@@ -99,6 +99,81 @@ KotlinCoreLearningDemo/
 2. 阅读 `core/common/di/ServiceLocator.kt` → 简单 DI
 3. 阅读 `core/domain/usecase/` → 用例层设计
 
+## Core 模块阅读指南（真实工程怎么写）
+
+core 模块展示**真实项目分层架构**，建议按以下顺序阅读：
+
+### Step 1: 先看领域模型（domain/model）
+| 文件 | 知识点 |
+|-----|-------|
+| `Activity.kt` | **密封类**（ActivityType）、**数据类**（Activity）、枚举 |
+| `User.kt` | 数据类 + 计算属性 + 解构 |
+
+**阅读重点**：
+- 密封类如何表示"有限种可能"的活动类型
+- 数据类自动生成的 equals/copy/toString 有什么作用
+- 计算属性（val xxx get()）和函数的区别
+
+### Step 2: 再看仓储接口（domain/repository）
+| 文件 | 知识点 |
+|-----|-------|
+| `ActivityRepository.kt` | **接口**定义、**依赖倒置** |
+
+**阅读重点**：
+- 为什么仓储接口放在 domain 层（不依赖具体实现）
+- 接口隔离原则：只暴露必要方法
+
+### Step 3: 看数据层实现（data/）
+| 文件 | 知识点 |
+|-----|-------|
+| `source/ActivityLocalSource.kt` | 仓储**实现类**、模拟数据 |
+| `repository/ActivityRepositoryImpl.kt` | **委托模式**（by 关键字） |
+
+**阅读重点**：
+- ActivityLocalSource 是数据源实现
+- ActivityRepositoryImpl 用 `by localSource` 自动委托接口方法
+- 为什么用委托：不用手写代理代码
+
+### Step 4: 看用例层（domain/usecase）
+| 文件 | 知识点 |
+|-----|-------|
+| `CalculatePromotionUseCase.kt` | **when 表达式**处理密封类、业务逻辑编排 |
+
+**阅读重点**：
+- 用例如何编排多个步骤
+- when 如何确保覆盖所有 ActivityType
+- 业务结果用 PromotionResult 数据类封装
+
+### Step 5: 看公共组件（common/）
+| 文件 | 知识点 |
+|-----|-------|
+| `result/AppResult.kt` | **sealed class** 封装成功/失败、链式调用 |
+| `di/ServiceLocator.kt` | 简单 **DI 容器**、reified 泛型 |
+
+**阅读重点**：
+- AppResult 如何强制调用者处理错误
+- map/flatMap/onSuccess/onError 链式调用
+- ServiceLocator 如何实现依赖注入（不用框架）
+
+### 完整调用链示例
+```
+Main.kt
+    ↓ 调用
+CalculatePromotionUseCase.execute(order, activities)
+    ↓ 查询仓储
+ActivityRepository.getAll()
+    ↓ 实现
+ActivityRepositoryImpl ← by → ActivityLocalSource
+    ↓ 返回
+PromotionResult
+```
+
+这个流程展示了**分层架构**的标准做法：
+1. app 层调用用例
+2. 用例编排业务逻辑
+3. 用例调用仓储接口
+4. 仓储实现处理数据
+
 ## 亮点展示（面试可说）
 
 ### 1. 密封类处理多状态
