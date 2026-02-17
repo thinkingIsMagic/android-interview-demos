@@ -7,7 +7,9 @@ import com.mall.perflab.core.perf.PerformanceTracker
 import com.mall.perflab.core.perf.TraceLogger
 import com.mall.perflab.data.mock.DataGenerator
 import com.mall.perflab.data.model.MallData
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -213,7 +215,7 @@ class MallRepository(private val context: Context) {
         cacheTime = System.currentTimeMillis()
 
         // 异步写入磁盘（避免阻塞主线程）
-        Dispatchers.IO.dispatch(androidx.coroutines.EmptyCoroutineContext) {
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 val json = serializeMallData(data)
                 sp.edit()

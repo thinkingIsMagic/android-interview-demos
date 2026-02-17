@@ -3,8 +3,11 @@ package com.mall.perflab.ui
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -318,9 +321,11 @@ class CombinedAdapter(
     private val feedAdapter: FeedAdapter
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    // Item类型
-    private const val TYPE_FLOOR_HEADER = 100
-    private const val TYPE_FEED = 200
+    companion object {
+        // Item类型
+        private const val TYPE_FLOOR_HEADER = 100
+        private const val TYPE_FEED = 200
+    }
 
     // 列表数据
     private val items = mutableListOf<Pair<Int, Any>>()

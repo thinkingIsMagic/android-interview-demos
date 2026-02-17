@@ -12,9 +12,82 @@ import com.mall.perflab.core.config.FeatureToggle
 import com.mall.perflab.core.perf.PerformanceTracker
 import com.mall.perflab.core.perf.TraceLogger
 import kotlinx.coroutines.*
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 优化版View预创建管理器 - Mall Performance Lab
+ *
+ * ================================================================
+ * 【什么是View预创建？】
+ *
+ * Android中，View是通过XML布局文件" inflate"（膨胀）创建的。
+ * 这个过程很慢，因为需要：
+ * 1. 读取XML文件（IO操作）
+ * 2. 解析XML标签
+ * 3. 创建Java对象（内存分配）
+ * 4. 测量布局（计算位置大小）
+ * 5. 绘制到屏幕
+ *
+ * 通常一次inflate需要10-50ms！
+ * 列表滚动时频繁inflate会导致卡顿。
+ *
+ * ================================================================
+ * 【预创建的原理】
+ *
+ * 预先在后台把View创建好，放在"池子"里。
+ * 需要用的时候直接从池子取，不需要inflate。
+ *
+ * 对比：
+ * - Baseline：显示时才创建 → 第一次慢
+ * - Optimized：启动时就创建 → 每次都快
+ *
+ * ================================================================
+ * 【View复用池原理】
+ *
+ * RecyclerView的原理：
+ * 1. 屏幕显示10个Item，创建10个View
+ * 2. 滚动到第11个Item时
+ * 3. RecyclerView不会创建新View
+ * 4. 而是复用第1个Item的View
+ * 5. 只需要绑定新数据，不需要inflate
+ *
+ * 本项目的预创建就是手动实现这个池子：
+ * - 启动App时，在后台预创建View
+ * - 首次展示列表时，直接从池子取
+ * - 避免首次inflate的开销
+ *
+ * ================================================================
+ * 【预创建的时机】
+ *
+ * 1. App启动时（onCreate）
+ *    - 用户等待时间最长
+ *    - 可以做更多预创建
+ *
+ * 2. 列表滚动时
+ *    - 预加载下一个屏幕的Item
+ *    - RecyclerView自动处理
+ *
+ * 3. 页面跳转前
+ *    - 预创建下一个页面的View
+ *
+ * ================================================================
+ * 【预创建的注意事项】
+ *
+ * 1. 内存占用
+ *    - 预创建越多，内存占用越大
+ *    - 需要限制池子大小
+ *
+ * 2. 并行创建
+ *    - 使用Coroutine多线程并行创建
+ *    - 加快速度
+ *
+ * 3. 状态清理
+ *    - 复用View时要清空旧数据
+ *    - 否则会显示错误的内容
+ *
+ * 4. 首屏优先
+ *    - 先创建首屏的View
+ *    - 非首屏可以延迟创建
  *
  * 【优化点】
  * 1. 并行预创建：多线程同时inflate
@@ -30,23 +103,19 @@ object OptimizedViewPreWarmer {
 
     // ==================== 配置 ====================
 
-    companion object {
-        // 预创建View数量限制
-        private const val BANNER_LIMIT = 3
-        private const val COUPON_LIMIT = 5
-        private const val GRID_LIMIT = 6
-        private const val FEED_LIMIT = 10
+    // 预创建View数量限制
+    private const val BANNER_LIMIT = 3
+    private const val COUPON_LIMIT = 5
+    private const val GRID_LIMIT = 6
+    private const val FEED_LIMIT = 10
 
-        // 并行度
-        private const val PARALLELISM = 2
-    }
+    // 并行度
+    private const val PARALLELISM = 2
 
     // ==================== 组件 ====================
 
+    private var context: Context? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val inflater: LayoutInflater by lazy {
-        LayoutInflater.from(android.app.ApplicationContext())
-    }
 
     // 预创建View缓存池（ViewType -> View列表）
     private val viewPools = ConcurrentHashMap<String, MutableList<View>>()
@@ -177,68 +246,68 @@ object OptimizedViewPreWarmer {
     // ==================== 内部实现 ====================
 
     private suspend fun preWarmBannerPool(context: Context) {
-        val count = withContext(Dispatchers.IO) {
-            val pool = mutableListOf<View>()
+        val pool = withContext(Dispatchers.IO) {
+            val poolList = mutableListOf<View>()
             repeat(BANNER_LIMIT) {
                 val view = LayoutInflater.from(context)
                     .inflate(R.layout.item_banner_floor, null)
-                pool.add(view)
+                poolList.add(view)
                 onProgressCallback?.invoke(it + 1, BANNER_LIMIT + COUPON_LIMIT + GRID_LIMIT + FEED_LIMIT)
             }
-            pool
+            poolList
         }
-        viewPools["BannerFloor"] = count
+        viewPools["BannerFloor"] = pool
     }
 
     private suspend fun preWarmCouponPool(context: Context) {
-        val count = withContext(Dispatchers.IO) {
-            val pool = mutableListOf<View>()
+        val pool = withContext(Dispatchers.IO) {
+            val poolList = mutableListOf<View>()
             repeat(COUPON_LIMIT) {
                 val view = LayoutInflater.from(context)
                     .inflate(R.layout.item_coupon_floor, null)
-                pool.add(view)
+                poolList.add(view)
                 onProgressCallback?.invoke(
                     BANNER_LIMIT + it + 1,
                     BANNER_LIMIT + COUPON_LIMIT + GRID_LIMIT + FEED_LIMIT
                 )
             }
-            pool
+            poolList
         }
-        viewPools["CouponFloor"] = count
+        viewPools["CouponFloor"] = pool
     }
 
     private suspend fun preWarmGridPool(context: Context) {
-        val count = withContext(Dispatchers.IO) {
-            val pool = mutableListOf<View>()
+        val pool = withContext(Dispatchers.IO) {
+            val poolList = mutableListOf<View>()
             repeat(GRID_LIMIT) {
                 val view = LayoutInflater.from(context)
                     .inflate(R.layout.item_grid_floor, null)
-                pool.add(view)
+                poolList.add(view)
                 onProgressCallback?.invoke(
                     BANNER_LIMIT + COUPON_LIMIT + it + 1,
                     BANNER_LIMIT + COUPON_LIMIT + GRID_LIMIT + FEED_LIMIT
                 )
             }
-            pool
+            poolList
         }
-        viewPools["GridFloor"] = count
+        viewPools["GridFloor"] = pool
     }
 
     private suspend fun preWarmFeedPool(context: Context) {
-        val count = withContext(Dispatchers.IO) {
-            val pool = mutableListOf<View>()
+        val pool = withContext(Dispatchers.IO) {
+            val poolList = mutableListOf<View>()
             repeat(FEED_LIMIT) {
                 val view = LayoutInflater.from(context)
                     .inflate(R.layout.item_feed_product, null)
-                pool.add(view)
+                poolList.add(view)
                 onProgressCallback?.invoke(
                     BANNER_LIMIT + COUPON_LIMIT + GRID_LIMIT + it + 1,
                     BANNER_LIMIT + COUPON_LIMIT + GRID_LIMIT + FEED_LIMIT
                 )
             }
-            pool
+            poolList
         }
-        viewPools["ProductFeed"] = count
+        viewPools["ProductFeed"] = pool
     }
 
     /**

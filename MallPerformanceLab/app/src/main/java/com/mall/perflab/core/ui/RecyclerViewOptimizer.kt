@@ -1,10 +1,13 @@
 package com.mall.perflab.core.ui
 
+import android.view.View
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mall.perflab.core.config.FeatureToggle
 import com.mall.perflab.core.perf.PerformanceTracker
 import com.mall.perflab.core.perf.TraceLogger
+import kotlinx.coroutines.*
 
 /**
  * RecyclerView优化器
@@ -121,6 +124,92 @@ object RecyclerViewOptimizer {
 /**
  * DiffUtil优化
  *
+ * ================================================================
+ * 【什么是DiffUtil？】
+ *
+ * DiffUtil是Android RecyclerView库提供的一个工具类。
+ * 它用于比较两个列表的差异，计算出：
+ * - 哪些item是新增的
+ * - 哪些item是删除的
+ * - 哪些item是移动位置的
+ * - 哪些item内容变化了
+ *
+ * ================================================================
+ * 【为什么需要DiffUtil？】
+ *
+ * 场景：商品列表数据更新了
+ * - 原来的数据：["商品A", "商品B", "商品C"]
+ * - 新的数据：["商品A", "商品D", "商品B"]
+ *
+ * 传统做法：notifyDataSetChanged()
+ * - 整个列表全部重绘
+ * - 每个Item都执行onBindViewHolder
+ * - 性能差，有闪烁感
+ *
+ * 优化做法：DiffUtil
+ * - 自动计算差异：
+ *   - "商品C"被删除
+ *   - "商品D"是新增
+ *   - "商品A"和"商品B"位置变了
+ * - 只更新变化的部分
+ * - 高效且无闪烁
+ *
+ * ================================================================
+ * 【DiffUtil的工作原理】
+ *
+ * DiffUtil会调用Callback的4个方法：
+ *
+ * 1. getOldListSize() - 旧列表长度
+ * 2. getNewListSize() - 新列表长度
+ *
+ * 3. areItemsTheSame(oldPos, newPos)
+ *    判断两个位置是否是同一个"Item"
+ *    例子：id相同就认为是同一个item
+ *
+ * 4. areContentsTheSame(oldPos, newPos)
+ *    判断同一个item的内容是否变化
+ *    例子：比较字段值
+ *
+ * DiffUtil会找出最小更新序列，生成DiffResult
+ * RecyclerView根据DiffResult执行局部更新
+ *
+ * ================================================================
+ * 【使用示例】
+ *
+ * // 旧数据
+ * val oldList = listOf(Product(1, "A"), Product(2, "B"))
+ *
+ * // 新数据
+ * val newList = listOf(Product(1, "A"), Product(3, "C"), Product(2, "B"))
+ *
+ * // 计算差异
+ * val result = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+ *     override fun getOldListSize() = oldList.size
+ *     override fun getNewListSize() = newList.size
+ *
+ *     override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean {
+ *         return oldList[oldPos].id == newList[newPos].id  // 比较id
+ *     }
+ *
+ *     override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean {
+ *         return oldList[oldPos] == newList[newPos]  // 比较内容
+ *     }
+ * })
+ *
+ * // 应用差异
+ * adapter.diffDispatchUpdates(result)
+ *
+ * ================================================================
+ * 【注意事项】
+ *
+ * 1. DiffUtil计算本身是O(n)的，大数据量可能慢
+ *    建议在后台线程计算（使用calculateDiffAsync）
+ *
+ * 2. DiffUtil是"最小更新"，不是"最优移动"
+ *    有些场景下移动动画可能不完美
+ *
+ * 3. 列表很大时，可以考虑只Diff可见区域
+ *
  * 【原理】
  * - 全量刷新：notifyDataSetChanged() 重绘所有item
  * - 增量刷新：DiffUtil 只更新变化的部分
@@ -167,7 +256,7 @@ object DiffUtilOptimizer {
         areContentsTheSame: (T, T) -> Boolean,
         callback: (DiffUtil.DiffResult) -> Unit
     ) {
-        kotlinx.coroutines.Dispatchers.Default.dispatch(kotlinx.coroutines.EmptyCoroutineContext) {
+        withContext(Dispatchers.Default) {
             val result = calculateDiff(oldList, newList, areItemsTheSame, areContentsTheSame)
             callback(result)
         }

@@ -13,15 +13,40 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * 性能打点器 - Mall Performance Lab 核心可观测性组件
  *
- * 功能：
- * 1. 关键链路打点：冷启动→首帧→首屏数据→首屏渲染→可交互
- * 2. 模式分流：Baseline/Optimized 分开统计
- * 3. 结构化输出：日志 + 简单统计
+ * ================================================================
+ * 【什么是Trace？】
+ * Trace是Android系统提供的一个性能分析工具，类似iOS的Instruments。
+ * 它可以记录代码段的执行时间，帮助开发者发现性能瓶颈。
+ *
+ * Trace的工作原理：
+ * 1. 在代码中调用 Trace.beginSection("标签") 开始标记
+ * 2. 在代码结束位置调用 Trace.endSection() 结束标记
+ * 3. 系统会把这些数据写入到trace文件中
+ * 4. 使用Android Studio的Profiler或systrace工具查看
+ *
+ * ================================================================
+ * 【为什么需要打点？】
+ * 性能优化就像看病一样，需要先"诊断"才能"治疗"。
+ * 打点就是诊断工具，让我们知道：
+ * - 哪些地方慢？慢多久？
+ * - Baseline(原始) vs Optimized(优化后) 哪个更快？
+ * - 优化效果有多少？
+ *
+ * ================================================================
+ * 【本项目关键打点链路】
+ * app_cold_start     → 冷启动耗时（点击图标到进程创建）
+ * data_loaded        → 首屏数据到达（网络请求完成）
+ * content_ready      → 首屏渲染完成（第一帧绘制）
+ * interactive        → 首屏可交互（用户可以点击）
  *
  * 使用方式：
  * - PerformanceTracker.begin("cold_start")  // 开始打点
  * - PerformanceTracker.end("cold_start")    // 结束打点
  * - PerformanceTracker.dump()               // 输出全部记录
+ *
+ * 或者使用更便捷的lambda方式：
+ * - PerformanceTracker.trace("module_action") { /* 代码块 */ }
+ *   这会自动在代码块开始和结束时打点
  */
 object PerformanceTracker {
 

@@ -6,11 +6,75 @@ import android.os.Debug
 import com.mall.perflab.core.config.FeatureToggle
 import com.mall.perflab.core.perf.PerformanceTracker
 import com.mall.perflab.core.perf.TraceLogger
+import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 内存监控器
+ *
+ * ================================================================
+ * 【什么是内存？】
+ * 内存是App运行时使用的临时存储空间，像工作台一样。
+ * - 内存越大，能同时处理的任务越多
+ * - 内存不足会导致OOM（Out Of Memory）崩溃
+ *
+ * ================================================================
+ * 【Android内存结构】
+ *
+ * 1. Java Heap（Java堆）
+ *    - 存储Java/Kotlin对象，如String、List、自定义类等
+ *    - 由JVM管理，自动垃圾回收（GC）
+ *    - 查看方式：Runtime.getRuntime()
+ *
+ * 2. Native Heap（Native堆）
+ *    - C/C++代码分配的内存
+ *    - 最典型的是Bitmap图片
+ *    - 需要手动管理，容易泄漏
+ *    - 查看方式：Debug.getNativeHeapAllocatedSize()
+ *
+ * 3. RSS（Resident Set Size）
+ *    - 进程实际占用的物理内存
+ *    - 包括Java + Native + 系统库
+ *    - 这是用户真正关心的"内存占用"
+ *
+ * ================================================================
+ * 【什么是内存泄漏？】
+ * 内存泄漏 = 该回收的对象没有被回收
+ * 例子：Activity关闭了，但它的引用还在别的对象里，
+ *      导致GC无法回收这个Activity，占用越来越多内存
+ *
+ * ================================================================
+ * 【什么是GC？】
+ * GC = Garbage Collection 垃圾回收
+ * JVM自动扫描并回收不再使用的对象
+ *
+ * 但GC有以下问题：
+ * 1. 会造成卡顿（"Stop the world"）
+ * 2. 只能回收Java对象，不能回收Native对象（如Bitmap）
+ * 3. 内存持续增长会导致频繁GC，进一步卡顿
+ *
+ * ================================================================
+ * 【内存监控的意义】
+ * 1. 及时发现内存泄漏
+ * 2. 预防OOM崩溃
+ * 3. 发现内存抖动（频繁GC）
+ *
+ * ================================================================
+ * 【本项目的内存保护策略】
+ *
+ * 1. 实时监控
+ *    - 每5秒采样一次内存使用
+ *    - 记录内存变化趋势
+ *
+ * 2. 分级警告
+ *    - 80%使用率：警告，可能需要清理
+ *    - 90%使用率：危险，强制清理缓存
+ *
+ * 3. 低内存时自动清理
+ *    - 调用System.gc()建议回收
+ *    - 清理图片缓存
+ *    - 清理View预创建池
  *
  * 【优化原理】
  * 1. 实时监控：跟踪内存使用趋势
@@ -70,10 +134,10 @@ class MemoryMonitor(private val context: Context) {
         TraceLogger.i("MEMORY", "内存监控已启动")
 
         // 定时采样
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        GlobalScope.launch(Dispatchers.IO) {
             while (isMonitoring) {
                 sample()
-                kotlinx.coroutines.delay(SAMPLE_INTERVAL_MS)
+                delay(SAMPLE_INTERVAL_MS)
             }
         }
     }
@@ -97,7 +161,7 @@ class MemoryMonitor(private val context: Context) {
         val totalMem = info.totalMem
         val availMem = info.availMem
         val usedMem = totalMem - availMem
-        val usedPercent = (usedMem * 100) / totalMem
+        val usedPercent = ((usedMem * 100) / totalMem).toInt()
 
         // Java Heap
         val runtime = Runtime.getRuntime()
