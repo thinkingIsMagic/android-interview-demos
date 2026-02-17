@@ -44,9 +44,43 @@ enum class Mode {
 **关键设计模式**: 组合模式 + 开关模式。多个独立开关组合成一个大的优化模式。
 
 **面试考点**:
-1. @Volatile 的作用是什么？（可见性）
-2. 为什么用 object 而不是 class？（单例）
-3. 如何动态切换开关？（toggleMode() 方法）
+1. **@Volatile 的作用是什么？**
+   > **答**: 保证变量的**可见性**。当一个线程修改了 volatile 变量，其他线程能立即看到最新值。
+   >
+   > 原理：volatile 修饰的变量，在写入时会立即刷新到主内存，读取时会从主内存读取最新值。
+   >
+   > 注意：volatile **不保证原子性**。对于 `i++` 这种操作，需要用 AtomicInteger 或 synchronized。
+   >
+   > ```kotlin
+   > @Volatile var currentMode = Mode.BASELINE
+   > ```
+
+2. **为什么用 object 而不是 class？**
+   > **答**: object 是 Kotlin 中的**单例模式**，整个程序只有一个实例。
+   >
+   > - 不能写构造函数，自动延迟初始化
+   > - 线程安全（由 JVM 保证）
+   > - 用法简单，无需手动创建实例
+   >
+   > ```kotlin
+   > object FeatureToggle {
+   >     fun isOptimized() = currentMode == Mode.OPTIMIZED
+   > }
+   > // 使用时直接 FeatureToggle.isOptimized()
+   > ```
+
+3. **如何动态切换开关？**
+   > **答**: 通过 `toggleMode()` 方法切换 BASELINE 和 OPTIMIZED 两种模式。
+   >
+   > ```kotlin
+   > fun toggleMode() {
+   >     currentMode = when (currentMode) {
+   >         Mode.BASELINE -> Mode.OPTIMIZED
+   >         Mode.OPTIMIZED -> Mode.BASELINE
+   >     }
+   > }
+   > ```
+   > 切换后，所有 useXxx() 方法的返回值会相应变化，从而控制优化策略的启用/禁用。
 
 ---
 
@@ -116,10 +150,71 @@ PerformanceTracker.trace("my_operation") {
 - Trace API 可用于 systrace/perfetto 分析
 
 **面试考点**:
-1. CopyOnWriteArrayList 有什么特点？为什么适合这个场景？
-2. ConcurrentHashMap 和 HashMap 的区别？
-3. data class 自动生成了哪些方法？
-4. 如何用这个系统做 AB 测试？
+1. **CopyOnWriteArrayList 有什么特点？为什么适合这个场景？**
+   > **答**: CopyOnWriteArrayList 是线程安全的 ArrayList，适合**读多写少**的场景。
+   >
+   > 特点：
+   > - 读操作（get/iterator）无需加锁，高性能
+   > - 写操作（add/set）会复制整个数组，开销大
+   > - 迭代器弱一致性，迭代期间不会抛出异常
+   >
+   > 为什么适合打点场景？
+   > - 打点是"写一次，之后只读"
+   > - 记录写入后，主要操作是遍历统计
+   > - 读多写少，正好发挥优势
+   >
+   > ```kotlin
+   > private val records = CopyOnWriteArrayList<TraceRecord>()
+   > // 写入时复制整个数组
+   > records.add(record)
+   > // 读取时无需加锁
+   > records.filter { ... }
+   > ```
+
+2. **ConcurrentHashMap 和 HashMap 的区别？**
+   > **答**:
+   > - HashMap：线程不安全，可能出现数据不一致
+   > - ConcurrentHashMap：线程安全，采用分段锁（JDK8后用CAS+synchronized）
+   >
+   > ConcurrentHashMap 特点：
+   > - 读操作无需加锁（volatile 保证）
+   > - 写操作只锁定当前桶，不影响其他桶
+   > - 支持高并发，性能好
+   >
+   > ```kotlin
+   > private val summaryMap = ConcurrentHashMap<String, MutableList<TraceSummary>>()
+   > summaryMap[name] = mutableListOf(...)  // 线程安全
+   > ```
+
+3. **data class 自动生成了哪些方法？**
+   > **答**: data class 自动生成以下方法：
+   > - `equals()`：比较所有属性
+   > - `hashCode()`：基于所有属性计算
+   > - `toString()`：格式为 ClassName(prop1=value1, prop2=value2)
+   > - `copy()`：复制，可选择性修改属性
+   > - `componentN()`：解构赋值，如 component1(), component2()
+   >
+   > ```kotlin
+   > data class User(val name: String, val age: Int)
+   > val user1 = User("Tom", 20)
+   > val user2 = user1.copy(age = 21)  // 修改 age
+   > val (name, age) = user1  // 解构
+   > ```
+
+4. **如何用这个系统做 AB 测试？**
+   > **答**: 通过 FeatureToggle 切换模式，PerformanceTracker 自动分开统计。
+   >
+   > 步骤：
+   > 1. 设置 `FeatureToggle.currentMode = Mode.BASELINE` 作为对照组
+   > 2. 运行 App，记录性能数据
+   > 3. 切换到 `Mode.OPTIMIZED` 作为实验组
+   > 4. 再次运行 App，记录性能数据
+   > 5. 调用 `PerformanceTracker.dump()` 查看对比结果
+   >
+   > 系统会自动：
+   > - 按 mode 字段分组记录
+   > - 计算每组的 avg/min/max
+   > - 输出对比表格
 
 ---
 
@@ -180,10 +275,71 @@ fun get(key: K): V? {
 **双缓存设计的目的**: 强引用保证热点数据不丢失，弱引用作为兜底避免 OOM。
 
 **面试考点**:
-1. LruCache 的淘汰算法是什么？（最近最少使用）
-2. WeakReference 和 StrongReference 的区别？
-3. 双重缓存的目的是什么？
-4. entryRemoved 回调有什么用？
+1. **LruCache 的淘汰算法是什么？**
+   > **答**: LRU = **Least Recently Used（最近最少使用）**。
+   >
+   > 原理：当缓存满时，淘汰最久未被访问的条目。
+   >
+   > Android 的 LruCache 基于 LinkedHashMap 实现，内部维护了一个双向链表：
+   > - 访问（get/put）时，把条目移到链表头部
+   > - 淘汰时，从链表尾部删除
+   >
+   > ```kotlin
+   > private val cache = LruCache<String, Bitmap>(maxSize = 50)
+   > cache.put("key1", bitmap)  // 加入缓存
+   > cache.get("key1")          // 访问后移到头部
+   > // 缓存满时，自动淘汰尾部条目
+   > ```
+
+2. **WeakReference 和 StrongReference 的区别？**
+   > **答**:
+   > - **StrongReference（强引用）**：只要有引用存在，对象就不会被 GC 回收
+   > - **WeakReference（弱引用）**：只有弱引用时，GC 会立即回收
+   >
+   > 使用场景：
+   > - 强引用：需要长期保留的对象
+   > - 弱引用：缓存、监听器注册等"可能不再需要"的场景
+   >
+   > ```kotlin
+   > // 强引用
+   > val cache = mutableMapOf<String, Bitmap>()  // 不释放
+   >
+   > // 弱引用
+   > val cache = mutableMapOf<String, WeakReference<Bitmap>>()  // 可被GC
+   > ```
+
+3. **双重缓存的目的是什么？**
+   > **答**: 兼顾**性能**和**安全**。
+   >
+   > - **强引用缓存（LruCache）**：保证热点数据不被意外回收，访问速度最快
+   > - **弱引用缓存（WeakReference）**：作为兜底，内存紧张时自动回收，避免 OOM
+   >
+   > 流程：
+   > 1. 优先使用强引用缓存（快）
+   > 2. 强引用未命中，查弱引用
+   > 3. 弱引用命中后，升级到强引用
+   > 4. 弱引用也未命中，只能重新加载
+
+4. **entryRemoved 回调有什么用？**
+   > **答**: 当缓存条目被淘汰时回调，可用于：
+   > - 资源回收（如关闭文件、释放 Bitmap）
+   > - 统计淘汰信息
+   > - 写日志追踪
+   >
+   > ```kotlin
+   > private val cache = LruCache<String, Bitmap>(maxSize) {
+   >     override fun entryRemoved(
+   >         evicted: Boolean,  // 是否是被淘汰的（true），还是被删除的（false）
+   >         key: String,
+   >         oldValue: Bitmap?,
+   >         newValue: Bitmap?
+   >     ) {
+   >         if (evicted) {
+   >             oldValue?.recycle()  // 释放 Bitmap 内存
+   >         }
+   >     }
+   > }
+   > ```
 
 ---
 
@@ -589,142 +745,6 @@ A: 必须是 final，不能继承。自动生成 equals/hashCode/toString/copy/c
 ### Q4: MutableList += 操作有什么问题？
 
 A: 在协程中直接修改 MutableList 不是线程安全的。FeedAdapter 中应该用 submitList() 触发 DiffUtil 更新。
-
----
-
-## 七、面试问题速答
-
-### 1. @Volatile 的作用是什么？
-
-**答**: 保证变量的**可见性**。当一个线程修改了 volatile 变量，其他线程能立即看到最新值。但 volatile 不保证原子性（如 i++ 这种操作）。
-
-```kotlin
-@Volatile var currentMode = Mode.BASELINE
-```
-
-### 2. object 和 class 的区别？
-
-**答**: object 是**单例模式**，整个程序只有一个实例。不能构造函数，自动延迟初始化。class 需要手动创建实例。
-
-```kotlin
-object Singleton {
-    fun hello() = println("单例")
-}
-```
-
-### 3. LruCache 的淘汰算法是什么？
-
-**答**: LRU = **Least Recently Used（最近最少使用）**。当缓存满时，淘汰最久未被访问的条目。Android 的 LruCache 基于 LinkedHashMap 实现。
-
-### 4. WeakReference 和 StrongReference 的区别？
-
-**答**:
-- StrongReference（强引用）：只要有引用，对象就不会被回收
-- WeakReference（弱引用）：只有弱引用时，GC 会回收
-
-### 5. Mutex 和 synchronized 的区别？
-
-**答**: Mutex 是 Kotlin 协程的锁，synchronized 是 Java 的锁。
-- Mutex.withLock() 可以在协程中挂起，不会阻塞线程
-- synchronized 会阻塞线程，协程中使用会阻塞整个线程
-
-### 6. CopyOnWriteArrayList 有什么特点？
-
-**答**: 读多写少场景适用。写操作会复制整个数组，读取无需加锁。缺点是写操作开销大，不适合频繁写入的场景。
-
-### 7. ConcurrentHashMap 和 HashMap 的区别？
-
-**答**:
-- HashMap：线程不安全
-- ConcurrentHashMap：线程安全，采用分段锁（JDK8后用CAS+ synchronized）
-
-### 8. data class 自动生成哪些方法？
-
-**答**: equals()、hashCode()、toString()、copy()、component1()、component2()...
-
-### 9. post 和 postDelayed 的区别？
-
-**答**:
-- post()：将 Runnable 投递到消息队列尾部，**立即执行**（等下一帧）
-- postDelayed()：延迟指定时间后执行
-
-### 10. SupervisorJob 有什么作用？
-
-**答**: 子协程失败不影响父协程。如果是普通 Job，子协程失败会导致整个协程树取消。
-
-```kotlin
-val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-```
-
-### 11. 为什么图片加载用 Dispatchers.IO？
-
-**答**: IO 操作（网络请求、文件读写）是 CPU 密集度低但耗时的操作。Dispatchers.IO 是专门用于 IO 操作的线程池，不会占用宝贵的 CPU 资源。
-
-### 12. DiffUtil 的原理？
-
-**答**: DiffUtil 会比较两个列表，计算出最小更新序列：
-- 哪些是新增的
-- 哪些是删除的
-- 哪些位置变了
-- 哪些内容变了
-
-RecyclerView 根据 DiffResult 只更新变化的部分，比 notifyDataSetChanged() 高效得多。
-
-### 13. 什么是 RTT？
-
-**答**: RTT = Round Trip Time（往返时延）。从发送请求到收到响应的总时间。包括：
-- 网络延迟（传输时间）
-- 服务器处理时间
-
-一次 HTTP 请求 = 1次 DNS + 1次 TCP + 1次 SSL + 1次 HTTP = 多个 RTT
-
-### 14. GZIP 压缩原理？
-
-**答**: GZIP 基于 DEFLATE 算法，通过以下方式压缩：
-- 查找重复字符串，用短标记替换
-- 使用哈夫曼编码
-- 重复内容越多，压缩率越高（通常 30%-70%）
-
-### 15. inSampleSize 是什么？
-
-**答**: 图片采样率，用于缩小图片尺寸：
-- = 1：原尺寸
-- = 2：宽高各缩小一半，内存减少 1/4
-- = 4：宽高各缩小到 1/16
-
-### 16. inBitmap 是什么？
-
-**答**: Bitmap 内存复用。复用已存在的 Bitmap 内存来加载新图片，避免重复分配内存，减少 GC 压力。
-
-### 17. 为什么 SharedPreferences 不适合存大量数据？
-
-**答**:
-- 全量加载：每次读取都加载全部数据
-- 主线程风险：commit() 阻塞，apply() 异步但可能丢数据
-- 不支持多进程
-- 建议用：DataStore 或 MMKV
-
-### 18. 什么是 Trace.beginSection？
-
-**答**: Android 系统提供的性能分析 API。配合 systrace/perfetto 工具，可以可视化代码执行时间，定位性能瓶颈。
-
-### 19. 什么是冷启动？
-
-**答**: 从点击图标到进程创建的过程。包括：
-- Zygote fork 进程
-- Application.onCreate()
-- Activity.onCreate()
-
-打点方式：`app_cold_start`
-
-### 20. 什么是首屏渲染？
-
-**答**: 第一帧绘制到屏幕的过程。包括：
-- 数据加载完成
-- 视图 inflate 完成
-- 第一次 draw 完成
-
-打点方式：`perf_mall_first_content`
 
 ---
 
