@@ -243,26 +243,31 @@ private val cache: LruCache<K, V> = object : LruCache<K, V>(maxSize) {
 }
 ```
 
-第3步：理解双缓存设计。阅读第47行和第52-83行：
-- cache: LruCache 强引用缓存
-- weakCache: WeakReference 弱引用缓存
+第3步：理解双缓存设计。阅读代码：
+- cache: LruCache 强引用缓存（一级）
+- weakCache: WeakReference 弱引用缓存（二级）
 
 ```kotlin
-// 弱引用缓存，用于存放大对象
-private val weakCache = mutableMapOf<K, WeakReference<V>>()
+// 【关键】在 entryRemoved 中把被淘汰的数据存入弱引用缓存
+override fun entryRemoved(evicted: Boolean, key: K, oldValue: V, newValue: V?) {
+    if (evicted && oldValue != null) {
+        // LruCache满了，被淘汰的数据存入二级缓存
+        weakCache[key] = WeakReference(oldValue)
+    }
+}
 
 fun put(key: K, value: V) {
-    cache.put(key, value)              // 放入强引用
-    weakCache[key] = WeakReference(value)  // 同时放入弱引用
+    cache.put(key, value)  // 只存入一级，二级在entryRemoved中自动处理
 }
 
 fun get(key: K): V? {
-    // 1. 先查强引用
+    // 1. 先查一级缓存
     cache.get(key)?.let { return it }
 
-    // 2. 查弱引用，找到后升级到强引用
+    // 2. 查二级缓存，找到后升级到一级
     weakCache[key]?.get()?.let {
-        put(key, it)  // 升级
+        put(key, it)  // 升级到一级
+        weakCache.remove(key)  // 清理二级
         return it
     }
 
@@ -270,7 +275,7 @@ fun get(key: K): V? {
 }
 ```
 
-第4步：理解淘汰机制。LruCache 自动淘汰最近最少使用的条目，WeakReference 在内存紧张时自动回收。
+第4步：理解淘汰机制。LruCache 自动淘汰最近最少使用的条目，entryRemoved 回调把被淘汰的数据存入 WeakReference，WeakReference 在内存紧张时自动回收。
 
 **双缓存设计的目的**: 强引用保证热点数据不丢失，弱引用作为兜底避免 OOM。
 
