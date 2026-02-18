@@ -16,9 +16,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mall.perflab.R
+import com.mall.perflab.core.cache.OptimizedCacheManager
 import com.mall.perflab.core.config.FeatureToggle
+import com.mall.perflab.core.image.BitmapProcessor
+import com.mall.perflab.core.memory.MemoryMonitor
 import com.mall.perflab.core.perf.PerformanceTracker
 import com.mall.perflab.core.perf.TraceLogger
+import com.mall.perflab.core.prewarm.OptimizedViewPreWarmer
+import com.mall.perflab.core.ui.RecyclerViewOptimizer
 import com.mall.perflab.data.model.FeedItem
 import com.mall.perflab.data.model.MallData
 import com.mall.perflab.data.model.MarketingFloor
@@ -63,20 +68,77 @@ class MainActivity : AppCompatActivity() {
     // 协程作用域
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    // ==================== 性能优化组件 ====================
+
+    // 缓存管理器
+    private lateinit var cacheManager: OptimizedCacheManager
+
+    // 内存监控器
+    private lateinit var memoryMonitor: MemoryMonitor
+
+    // View预创建器
+    private lateinit var viewPreWarmer: OptimizedViewPreWarmer
+
     // ==================== 生命周期 ====================
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        initOptimizers()  // 初始化优化组件
         initViews()
         initAdapter()
+        preWarmViews()    // 预创建View
         loadData()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
+        // 停止内存监控
+        if (::memoryMonitor.isInitialized) {
+            memoryMonitor.stop()
+        }
+    }
+
+    // ==================== 初始化优化组件 ====================
+
+    private fun initOptimizers() {
+        // 1. 初始化缓存管理器
+        cacheManager = OptimizedCacheManager(this)
+
+        // 2. 初始化内存监控器
+        memoryMonitor = MemoryMonitor(this)
+        if (FeatureToggle.useMemoryMonitor()) {
+            memoryMonitor.start()
+            TraceLogger.i("MEMORY", "内存监控已启动")
+        }
+
+        // 3. RecyclerView优化配置
+        if (FeatureToggle.useRecyclerViewOptimize()) {
+            // RecyclerViewOptimizer 的配置在initAdapter中应用
+        }
+
+        // 4. Bitmap处理器初始化
+        // BitmapProcessor 是单例，无需初始化
+
+        TraceLogger.i("PERF", "优化组件初始化完成")
+    }
+
+    /**
+     * 预创建View（提升首屏渲染速度）
+     */
+    private fun preWarmViews() {
+        if (!FeatureToggle.useViewPreWarm()) return
+
+        PerformanceTracker.trace("view_prewarm") {
+            // 预创建楼层和Feed的View
+            viewPreWarmer = OptimizedViewPreWarmer
+            viewPreWarmer.preWarm(this) { current, total ->
+                // 进度回调（可选）
+                TraceLogger.d("PREWARM", "预创建进度: $current/$total")
+            }
+        }
     }
 
     // ==================== 初始化 ====================
@@ -121,8 +183,10 @@ class MainActivity : AppCompatActivity() {
                 // 滚动到底部时加载更多
                 val layoutManager = rv.layoutManager as LinearLayoutManager
                 val totalItemCount = layoutManager.itemCount
+                // 最后一个可见item的positiion
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
 
+                // 判断是否到达底部
                 if (lastVisible >= totalItemCount - 3 && repository.hasMoreFeed()) {
                     loadMoreFeed()
                 }
@@ -137,18 +201,51 @@ class MainActivity : AppCompatActivity() {
         // Feed Adapter（注入图片加载逻辑）
         feedAdapter = FeedAdapter { imageView, url ->
             // 【优化点】图片加载
-            // 这里简化处理，实际项目应使用Glide/Picasso
-            // 优化策略：异步加载、缓存、采样
-            loadImageAsync(imageView, url)
+            // 使用BitmapProcessor进行优化：采样率缩放 + 内存复用
+            loadImageOptimized(imageView, url)
         }
 
-        // 组合Adapter（使用RecyclerView的另外方式，这里简化为单一列表）
-        // 实际实现中，楼层和Feed可以用一个列表或分开
-        // 这里简化：楼层 + Feed = 完整列表
+        // 组合Adapter
         val adapter = CombinedAdapter(floorAdapter, feedAdapter)
         rvMall.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             this.adapter = adapter
+
+            // 【优化点】RecyclerView优化配置
+            if (FeatureToggle.useRecyclerViewOptimize()) {
+                RecyclerViewOptimizer.configure(this)
+            }
+        }
+    }
+
+    /**
+     * 使用BitmapProcessor优化图片加载
+     */
+    private fun loadImageOptimized(imageView: ImageView, url: String) {
+        if (!FeatureToggle.useImageOptimize()) {
+            // 未启用优化，使用原始方式
+            loadImageAsync(imageView, url)
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                // 使用BitmapProcessor优化加载（指定目标尺寸进行采样缩放）
+                val targetSize = Pair(300, 300)  // 缩放到合适大小
+                val bitmap = BitmapProcessor.loadBitmap(
+                    context = this@MainActivity,
+                    path = url,
+                    targetSize = targetSize
+                )
+
+                withContext(Dispatchers.Main) {
+                    if (bitmap != null) {
+                        imageView.setImageBitmap(bitmap)
+                    }
+                }
+            } catch (e: Exception) {
+                TraceLogger.e("IMAGE", "图片加载失败: $url", e)
+            }
         }
     }
 

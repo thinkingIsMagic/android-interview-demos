@@ -57,6 +57,15 @@ object FeatureToggle {
 
         /** 是否启用主线程减负（IO到子线程） */
         var enableIoOffMain: Boolean = true
+
+        /** 是否启用内存监控 */
+        var enableMemoryMonitor: Boolean = true
+
+        /** 是否启用RecyclerView优化 */
+        var enableRecyclerViewOptimize: Boolean = true
+
+        /** 是否启用图片优化（采样率、内存复用） */
+        var enableImageOptimize: Boolean = true
     }
 
     // ==================== 便捷判断方法 ====================
@@ -72,6 +81,9 @@ object FeatureToggle {
     fun useImagePlaceholder(): Boolean = isOptimized && Optimized.enableImagePlaceholder
     fun useParallelInit(): Boolean = isOptimized && Optimized.enableParallelInit
     fun useIoOffMain(): Boolean = isOptimized && Optimized.enableIoOffMain
+    fun useMemoryMonitor(): Boolean = isOptimized && Optimized.enableMemoryMonitor
+    fun useRecyclerViewOptimize(): Boolean = isOptimized && Optimized.enableRecyclerViewOptimize
+    fun useImageOptimize(): Boolean = isOptimized && Optimized.enableImageOptimize
 
     /**
      * 切换到优化模式（用于动态切换对比）

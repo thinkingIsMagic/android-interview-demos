@@ -2,6 +2,7 @@ package com.mall.perflab.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.mall.perflab.core.cache.OptimizedCacheManager
 import com.mall.perflab.core.config.FeatureToggle
 import com.mall.perflab.core.perf.PerformanceTracker
 import com.mall.perflab.core.perf.TraceLogger
@@ -36,9 +37,17 @@ class MallRepository(private val context: Context) {
 
         // 缓存过期时间（5分钟）
         private const val CACHE_EXPIRE_MS = 5 * 60 * 1000L
+
+        // 缓存键
+        private const val CACHE_KEY_MALL_DATA = "mall_data"
     }
 
-    // 内存缓存（单例）
+    // 【优化组件】缓存管理器（内存+磁盘双缓存）
+    private val cacheManager: OptimizedCacheManager by lazy {
+        OptimizedCacheManager(context)
+    }
+
+    // 内存缓存（备用/兼容旧逻辑）
     private var memoryCache: MallData? = null
     private var cacheTime: Long = 0
 
@@ -66,14 +75,19 @@ class MallRepository(private val context: Context) {
     suspend fun getMallData(forceRefresh: Boolean = false): Pair<MallData?, Long> {
         val startTime = System.currentTimeMillis()
 
-        // 优化点1：缓存读取（内存优先，磁盘次之）
+        // 优化点1：缓存读取（使用OptimizedCacheManager）
         if (!forceRefresh && FeatureToggle.useCache()) {
-            val cached = getFromCache()
-            if (cached != null) {
+            // 优先使用缓存管理器
+            val cachedJson = cacheManager.get(CACHE_KEY_MALL_DATA)
+            if (cachedJson != null) {
                 val latency = System.currentTimeMillis() - startTime
-                TraceLogger.Cache.hit("mall_data")
-                // 【缓存命中】直接返回，时间极短
-                return cached to latency
+                try {
+                    val cached = deserializeMallData(cachedJson)
+                    TraceLogger.Cache.hit("mall_data")
+                    return cached to latency
+                } catch (e: Exception) {
+                    // 解析失败，重新请求
+                }
             }
             TraceLogger.Cache.miss("mall_data")
         }
@@ -81,13 +95,21 @@ class MallRepository(private val context: Context) {
         // 发起网络请求
         val (data, networkLatency) = withContext(Dispatchers.IO) {
             PerformanceTracker.trace("repo_fetch_mall_data", "network") {
+                // 使用CountDownLatch等待异步回调完成
+                val latch = java.util.concurrent.CountDownLatch(1)
                 var result: MallData? = null
-                var lat = 0L
-                DataGenerator.generateMallData { mallData, latency ->
+                var latency = 0L
+
+                DataGenerator.generateMallData { mallData, lat ->
                     result = mallData
-                    lat = latency
+                    latency = lat
+                    latch.countDown()
                 }
-                (result to lat)
+
+                // 等待回调完成（最多等5秒）
+                latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
+
+                (result to latency)
             }
         }
 
@@ -96,13 +118,30 @@ class MallRepository(private val context: Context) {
             currentPage = data.nextPage
             hasMore = data.hasMore
 
-            // 优化点2：缓存写入（内存+磁盘）
+            // 优化点2：缓存写入（使用OptimizedCacheManager）
             if (FeatureToggle.useCache()) {
-                saveToCache(data)
+                val json = serializeMallData(data)
+                cacheManager.put(CACHE_KEY_MALL_DATA, json, CACHE_EXPIRE_MS)
             }
         }
 
         return data to networkLatency
+    }
+
+    // 序列化MallData为JSON
+    private fun serializeMallData(data: MallData): String {
+        return "${data.nextPage}|${data.hasMore}|${data.marketingFloors.size}|${data.feedItems.size}"
+    }
+
+    // 从JSON反序列化MallData
+    private fun deserializeMallData(json: String): MallData {
+        val parts = json.split("|")
+        return MallData(
+            nextPage = parts.getOrNull(0)?.toIntOrNull() ?: 1,
+            hasMore = parts.getOrNull(1)?.toBooleanStrictOrNull() ?: true,
+            marketingFloors = emptyList(),
+            feedItems = emptyList()
+        )
     }
 
     /**
@@ -237,27 +276,4 @@ class MallRepository(private val context: Context) {
         return System.currentTimeMillis() - cacheTime < CACHE_EXPIRE_MS
     }
 
-    // ==================== 序列化（简化版） ====================
-
-    private fun serializeMallData(data: MallData): String {
-        // 简化版序列化：保存关键信息
-        // 实际项目应使用Gson/Moshi
-        return buildString {
-            append("floors=${data.marketingFloors.size};")
-            append("items=${data.feedItems.size};")
-            append("page=${data.nextPage};")
-            append("hasMore=${data.hasMore}")
-        }
-    }
-
-    private fun deserializeMallData(json: String): MallData {
-        // 简化版反序列化
-        // 实际项目应使用Gson/Moshi解析完整JSON
-        return MallData(
-            marketingFloors = emptyList(),
-            feedItems = emptyList(),
-            hasMore = true,
-            nextPage = 0
-        )
-    }
 }
