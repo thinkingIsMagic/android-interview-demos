@@ -45,6 +45,12 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    // AppCompat for legacy Activity (for demo purposes)
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    // Material Design
+    implementation("com.google.android.material:material:1.12.0")
+    // LeakCanary - 自动检测内存泄漏
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.12")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

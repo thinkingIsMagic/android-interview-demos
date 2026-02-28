@@ -22,6 +22,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 内存泄漏演示 Activity -->
+        <activity
+            android:name=".leak.LeakDemoActivity"
+            android:exported="false"
+            android:label="泄漏演示" />
+
+        <activity
+            android:name=".leak.LeakFixedDemoActivity"
+            android:exported="false"
+            android:label="修复演示" />
     </application>
 
 </manifest>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Handler 内存泄漏演示"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="点击按钮开始演示"
+        android:textSize="16sp"
+        android:gravity="center"
+        android:padding="16dp"
+        android:background="#F5F5F5"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="演示步骤：&#10;1. 点击启动泄漏场景&#10;2. 立即按返回键退出 app&#10;3. 等待 15 秒后观察日志&#10;4. 如果集成 LeakCanary 会收到通知"
+        android:textSize="14sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/btnStartTask"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="启动泄漏场景"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnFinish"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="完成（退出）"
+        android:backgroundTint="#F44336" />
+
+</LinearLayout>
