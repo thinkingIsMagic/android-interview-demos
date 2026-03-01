@@ -25,7 +25,7 @@ class LeakDemoActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "LeakDemoActivity"
         private const val MSG_DELAYED_TASK = 1
-        private const val DELAY_TIME = 15000L // 15秒
+        private const val DELAY_TIME = 30000L
     }
 
     private lateinit var statusText: TextView

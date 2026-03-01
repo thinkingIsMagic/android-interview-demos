@@ -33,6 +33,12 @@
             android:name=".leak.LeakFixedDemoActivity"
             android:exported="false"
             android:label="修复演示" />
+
+        <!-- 火焰图分析演示 Activity -->
+        <activity
+            android:name=".performance.FlameGraphDemoActivity"
+            android:exported="false"
+            android:label="火焰图分析" />
     </application>
 
 </manifest>
