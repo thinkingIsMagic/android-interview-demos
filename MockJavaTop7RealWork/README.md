@@ -5,32 +5,45 @@
 ## 项目结构
 
 ```
-app/src/main/java/com/example/mockjavatop7realwork/interview/
-├── q1_emoji_panel/          # 面试题1：表情面板设计
-│   └── Question1_EmojiPanel.java
-├── q2_weak_network/         # 面试题2：弱网检测
-│   └── Question2_WeakNetworkDetector.java
-├── q3_massive_data/        # 面试题3：海量数据处理
-│   └── Question3_MassiveDataProcessor.java
-├── q4_download_manager/     # 面试题4：离线下载管理器
-│   └── Question4_DownloadManager.java
-├── q5_im_message/          # 面试题5：IM消息处理
-│   └── Question5_IMMessageHandler.java
-├── q6_large_image/         # 面试题6：超长图查看器
-│   └── Question6_LargeImageViewer.java
-└── q7_apm_monitor/         # 面试题7：APM性能监控
-    └── Question7_APMMonitor.java
+app/src/main/java/com/example/mockjavatop7realwork/
+├── MainActivity.kt
+├── c_interview/            # 面试题（7道）
+│   ├── q1_emoji_panel/      # 表情面板设计
+│   ├── q2_weak_network/     # 弱网检测
+│   ├── q3_massive_data/     # 海量数据处理
+│   ├── q4_download_manager/ # 离线下载管理器
+│   ├── q5_im_message/       # IM消息处理
+│   ├── q6_large_image/      # 超长图查看器
+│   └── q7_apm_monitor/      # APM性能监控
+└── b_basics/                # 基础题（7道）
+    ├── MainActivity.kt
+    ├── q1_multi_type/       # RecyclerView多类型Item
+    ├── q2_handler/          # Handler延时任务
+    ├── q3_network_popup/    # 网络状态触发弹窗
+    ├── q4_circle_view/      # 自定义View测量绘制
+    ├── q5_async_task/      # 异步任务与UI更新
+    ├── q6_draggable_view/   # 自定义View触摸交互
+    └── q7_retrofit/        # Retrofit网络请求
 
 docs/
 ├── ANSWERS.md              # 汇总答案
-└── answers/                # 分题答案
-    ├── q1_emoji_panel.md
-    ├── q2_weak_network.md
-    ├── q3_massive_data.md
-    ├── q4_download_manager.md
-    ├── q5_im_message.md
-    ├── q6_large_image.md
-    └── q7_apm_monitor.md
+└── answers/
+    ├── interview/          # 面试题答案
+    │   ├── q1_emoji_panel.md
+    │   ├── q2_weak_network.md
+    │   ├── q3_massive_data.md
+    │   ├── q4_download_manager.md
+    │   ├── q5_im_message.md
+    │   ├── q6_large_image.md
+    │   └── q7_apm_monitor.md
+    └── basics/              # 基础题答案
+        ├── q1_multi_type.md
+        ├── q2_handler.md
+        ├── q3_network_popup.md
+        ├── q4_circle_view.md
+        ├── q5_async_task.md
+        ├── q6_draggable_view.md
+        └── q7_retrofit.md
 ```
 
 ## 面试题列表

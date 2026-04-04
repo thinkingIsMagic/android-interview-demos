@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.memoryleaktest.leak.LeakDemoActivity
 import com.example.memoryleaktest.leak.LeakFixedDemoActivity
+import com.example.memoryleaktest.leak.ObjectLeakDemoActivity
 import com.example.memoryleaktest.performance.FlameGraphDemoActivity
 import com.example.memoryleaktest.ui.theme.MemoryLeakTestTheme
 
@@ -30,6 +31,9 @@ class MainActivity : ComponentActivity() {
                     onStartFixedDemo = {
                         startActivity(Intent(this, LeakFixedDemoActivity::class.java))
                     },
+                    onStartObjectLeakDemo = {
+                        startActivity(Intent(this, ObjectLeakDemoActivity::class.java))
+                    },
                     onStartFlameGraphDemo = {
                         startActivity(Intent(this, FlameGraphDemoActivity::class.java))
                     }
@@ -44,6 +48,7 @@ class MainActivity : ComponentActivity() {
 fun HomeScreen(
     onStartLeakyDemo: () -> Unit,
     onStartFixedDemo: () -> Unit,
+    onStartObjectLeakDemo: () -> Unit,
     onStartFlameGraphDemo: () -> Unit
 ) {
     Scaffold(
@@ -94,6 +99,17 @@ fun HomeScreen(
                 onClick = onStartFixedDemo
             )
 
+            // 普通对象泄漏演示入口
+            DemoCard(
+                title = "普通对象内存泄漏",
+                description = "List/Map/Manager/Thread\n手动使用 LeakCanary 观察对象",
+                buttonText = "进入排查演示",
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                buttonColor = MaterialTheme.colorScheme.secondary,
+                onClick = onStartObjectLeakDemo
+            )
+
             // 火焰图演示入口
             DemoCard(
                 title = "火焰图分析",
@@ -109,7 +125,7 @@ fun HomeScreen(
 
             // 说明文字
             Text(
-                text = "提示：配合 LeakCanary 和 Android Profiler 使用效果更佳\n参考文档: docs/Handler内存泄漏分析指南.md",
+                text = "提示：配合 LeakCanary 和 Android Profiler 使用效果更佳\n参考文档: docs/ 目录下",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

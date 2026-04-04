@@ -1,5 +1,6 @@
 package com.example.mockjavatop7realwork
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.mockjavatop7realwork.ui.theme.MockJavaTop7RealWorkTheme
+import com.example.mockjavatop7realwork.b_basics.MainActivity as JavaPracticeMainActivity
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,7 +24,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             MockJavaTop7RealWorkTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    InterviewQuestionsScreen(modifier = Modifier.padding(innerPadding))
+                    InterviewQuestionsScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        onJavaPracticeClick = {
+                            startActivity(Intent(this, JavaPracticeMainActivity::class.java))
+                        }
+                    )
                 }
             }
         }
@@ -83,7 +90,10 @@ val questions = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InterviewQuestionsScreen(modifier: Modifier = Modifier) {
+fun InterviewQuestionsScreen(
+    modifier: Modifier = Modifier,
+    onJavaPracticeClick: () -> Unit = {}
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -95,6 +105,32 @@ fun InterviewQuestionsScreen(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        // Java基础练习入口
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+                .clickable { onJavaPracticeClick() },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Java/Android 基础练习",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "7 道基础编程题，适合入门练习",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
 
         Text(
             text = "共 7 道面试题，代码中已留空候选人需实现的部分",

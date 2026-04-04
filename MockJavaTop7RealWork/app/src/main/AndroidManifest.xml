@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -22,6 +24,32 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Java基础练习的Activity -->
+        <activity
+            android:name=".b_basics.MainActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q1_multi_type.MultiTypeActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q2_handler.HandlerActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q3_network_popup.NetworkPopupActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q4_circle_view.CircleViewActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q5_async_task.AsyncTaskActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q6_draggable_view.DraggableViewActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
+        <activity
+            android:name=".b_basics.q7_retrofit.RetrofitActivity"
+            android:theme="@style/Theme.AppCompat.Light"/>
     </application>
 
 </manifest>

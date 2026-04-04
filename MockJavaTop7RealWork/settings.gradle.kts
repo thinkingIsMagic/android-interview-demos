@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MockJavaTop7RealWork"
 include(":app")
- 
+include(":a_javaQuestion")

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 标题 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="普通对象内存泄漏排查"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="非 Activity 对象的内存泄漏更隐蔽，配合 LeakCanary 手动观察和 Profiler 分析"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="24dp" />
+
+        <!-- 状态显示 -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="点击下方按钮模拟泄漏场景"
+            android:textSize="16sp"
+            android:padding="12dp"
+            android:background="#E3F2FD"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 泄漏提示 -->
+        <TextView
+            android:id="@+id/tvHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="提示：观察 GC Root 引用链"
+            android:textSize="14sp"
+            android:textColor="#D32F2F"
+            android:padding="8dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- 场景 1：静态集合泄漏 -->
+        <Button
+            android:id="@+id/btnAddToStaticCache"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="场景1: 静态集合缓存泄漏"
+            android:layout_marginBottom="12dp" />
+
+        <!-- 场景 2：线程泄漏 -->
+        <Button
+            android:id="@+id/btnStartThread"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="场景2: 线程/定时器泄漏"
+            android:layout_marginBottom="12dp" />
+
+        <!-- 场景 3：单例泄漏 -->
+        <Button
+            android:id="@+id/btnSingletonLeak"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="场景3: 单例模式泄漏"
+            android:layout_marginBottom="12dp" />
+
+        <!-- 场景 4：监听器泄漏 -->
+        <Button
+            android:id="@+id/btnListenerLeak"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="场景4: 监听器未注销泄漏"
+            android:layout_marginBottom="24dp" />
+
+        <!-- 操作按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnTriggerGC"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="触发 GC"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btnCleanup"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="清理资源"
+                android:layout_marginStart="8dp" />
+
+        </LinearLayout>
+
+        <!-- 说明区域 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="排查步骤：\n1. 点击按钮模拟泄漏\n2. 观察 LeakCanary 通知\n3. 使用 Profiler 捕获堆快照\n4. 右键对象 -> Show Nearest GC Root\n5. 分析引用链找到泄漏源"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:padding="16dp"
+            android:layout_marginTop="24dp" />
+
+    </LinearLayout>
+
+</ScrollView>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="网络状态触发弹窗"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:padding="12dp"/>
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="当前状态: -"
+        android:textSize="16sp"
+        android:padding="16dp"/>
+
+    <Button
+        android:id="@+id/btnGood"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="GOOD"/>
+
+    <Button
+        android:id="@+id/btnNormal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="NORMAL"/>
+
+    <Button
+        android:id="@+id/btnBad"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BAD"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="规则：30秒内BAD占比>70% 或 3分钟内BAD≥4次，触发弹窗。弹窗后2分钟冷却期"
+        android:textSize="12sp"
+        android:padding="16dp"/>
+
+</LinearLayout>
