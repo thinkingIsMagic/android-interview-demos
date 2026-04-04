@@ -1,0 +1,659 @@
+# Android 稳定性问题实战练习指南
+
+> 本项目包含 12 个 OOM / ANR / Native Crash 场景，每个场景都有"问题版本"和"修复版本"开关。本文档提供完整的排查方法论。
+
+---
+
+## 目录
+
+1. [环境准备](#环境准备)
+2. [OOM 排查全流程](#oom-排查全流程)
+3. [ANR 排查全流程](#anr-排查全流程)
+4. [Native Crash 排查全流程](#native-crash-排查全流程)
+5. [LeakCanary 使用指南](#leakcanary-使用指南)
+6. [traces.txt 阅读指南](#traces.txt-阅读指南)
+7. [hprof / MAT 分析步骤](#hprof--mat-分析步骤)
+8. [addr2line / ndk-stack 使用](#addr2line--ndk-stack-使用)
+9. [面试话术模板](#面试话术模板)
+
+---
+
+## 环境准备
+
+### 必备工具
+
+```bash
+# 1. Android SDK (已配置)
+echo $ANDROID_HOME
+
+# 2. NDK (Homebrew 安装)
+ndk-build --version
+# 或
+$ANDROID_HOME/ndk/29.0.14206865/ndk-build --version
+
+# 3. hprof-conv (转换 hprof 格式)
+$ANDROID_HOME/platform-tools/hprof-conv
+
+# 4. adb (Android Debug Bridge)
+adb version
+
+# 5. logcat 查看
+adb logcat --help
+```
+
+### 常用 adb 命令
+
+```bash
+# 查看连接设备
+adb devices
+
+# 安装 app
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 获取 logcat
+adb logcat > logcat.txt
+
+# 过滤特定 tag
+adb logcat -s NativeCrash
+
+# 清除 logcat
+adb logcat -c
+
+# 获取 ANR traces
+adb pull /data/anr/traces.txt .
+
+# 获取 tombstones (Native crash)
+adb shell ls /data/tombstones/
+adb pull /data/tombstones/tombstone_00 .
+```
+
+---
+
+## OOM 排查全流程
+
+### 场景概览
+
+| ID | 场景 | 危险等级 | 根因 |
+|----|------|---------|------|
+| oom_static_ref | 静态引用泄漏 | 4 | static 变量持有 Activity |
+| oom_handler_leak | Handler 泄漏 | 4 | 延迟消息持有 Handler |
+| oom_unregistered_listener | 未反注册 Listener | 3 | Receiver 持有 Context |
+| oom_bitmap | Bitmap 大图 OOM | 5 | 大对象持续创建不释放 |
+| oom_collection | 集合泄漏 | 3 | 单例 List 只增不减 |
+
+### Step-by-Step 排查 SOP
+
+#### Step 1: 触发问题
+
+```bash
+# 1. 安装 Debug APK
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 2. 启动应用并打开对应场景页面
+```
+
+#### Step 2: 观察 LeakCanary 通知（最快方式）
+
+```
+# Debug 构建下，LeakCanary 自动初始化
+# 泄漏发生后约 5 秒，通知栏弹出 "LeakCanary: <ClassName> leaked"
+# 点击通知查看泄漏引用链
+```
+
+#### Step 3: 手动 GC + 内存监控
+
+```bash
+# 方法1: Android Studio Profiler
+# 菜单: View -> Tool Windows -> Profiler
+# 选择 app -> Memory
+# 观察 Heap Used 曲线
+
+# 方法2: Android Studio 的 "Dump Java heap"
+# Profiler 窗口 -> Memory -> "Dump Java heap" 按钮
+# 导出 .hprof 文件
+```
+
+#### Step 4: MAT 分析（深度排查）
+
+```bash
+# 1. 转换 hprof 格式（MAT 不支持原始格式）
+$ANDROID_HOME/platform-tools/hprof-conv \
+    original.hprof converted.hprof
+
+# 2. 打开 MAT
+# Download: https://memory.analyze.tool/
+
+# 3. File -> Open Heap Dump -> converted.hprof
+
+# 4. Histogram 视图（按类统计对象数量）
+# 输入过滤关键词，如 "MainActivity"
+# 旋转屏幕 3 次后，对比 MainActivity 对象数量
+
+# 5. 查看引用链
+# 右键对象 -> Path To GC Roots -> exclude weak/soft references
+# 最长的引用链的起点就是 GC Root（static 变量等）
+```
+
+### 关键排查点总结
+
+| 场景 | GC Root 类型 | 泄漏路径 | MAT 关键操作 |
+|------|------------|---------|------------|
+| 静态引用 | static 变量 | staticRef -> Activity | Histogram -> Path To GC Roots |
+| Handler | MessageQueue | Message -> Handler -> Activity | Histogram -> Message -> Path |
+| 未反注册 | 系统服务 | Context -> Receiver -> Activity | 同上 |
+| Bitmap | 集合引用 | List -> Bitmap[] | Histogram -> Bitmap[] |
+| 集合泄漏 | 单例 | Singleton.list -> Object[] | Histogram -> ByteArray[] |
+
+---
+
+## ANR 排查全流程
+
+### 场景概览
+
+| ID | 场景 | 危险等级 | 根因 |
+|----|------|---------|------|
+| anr_main_thread_sleep | 主线程 Sleep | 4 | Thread.sleep 阻塞主线程 |
+| anr_deadlock | 主线程死锁 | 5 | 交叉等锁形成环路 |
+| anr_large_file_io | 大文件 IO | 3 | 主线程同步读写 |
+| anr_sp_commit | SP commit 卡顿 | 2 | 大量 commit 同步写入 |
+
+### Step-by-Step 排查 SOP
+
+#### Step 1: 触发 ANR
+
+```bash
+# 点击"触发 ANR"按钮
+# 约 5-10 秒后系统弹出 "App Not Responding" 对话框
+```
+
+#### Step 2: 获取 traces.txt（核心）
+
+```bash
+# 方法1: 立即 pull（ANR 发生后第一时间）
+adb pull /data/anr/traces.txt .
+
+# 方法2: 查找当前正在写的 traces
+adb shell "cat /data/anr/traces.txt" > traces_latest.txt
+
+# 方法3: 从 logcat 中查找（ANR 发生时系统会写入）
+adb logcat -d | grep -A 50 "ANR in"
+```
+
+#### Step 3: 分析 traces.txt
+
+详见下文「traces.txt 阅读指南」。
+
+#### Step 4: 根据 CPU 使用率判断
+
+```bash
+# 在 ANR 发生期间观察 CPU
+adb shell dumpsys cpuinfo | grep com.example.androidcrashanalysis
+```
+
+| 状态 | CPU 使用 | 可能原因 | 排查方向 |
+|------|---------|---------|---------|
+| Runnable | 高 | 死循环、大量计算 | 找热点代码 |
+| Runnable | 低 | Sleep、IO 等待 | 找 sleep/io 调用 |
+| Blocked | 低 | 等锁 | 找持有锁的线程 |
+| Native | 中 | Native 代码 | 看 native 堆栈 |
+| Waiting | 低 | 等待条件变量 | 找 notify 位置 |
+
+---
+
+## Native Crash 排查全流程
+
+### 场景概览
+
+| ID | 场景 | 信号 | fault addr 特征 |
+|----|------|-----|----------------|
+| native_nullptr | 空指针解引用 | SIGSEGV (11) | 0x0 |
+| native_buffer_overflow | 缓冲区溢出 | SIGABRT (6) / SIGSEGV (11) | 栈地址范围 |
+| native_uaf | Use-After-Free | SIGSEGV (11) | 非零有效地址 |
+
+### Step-by-Step 排查 SOP
+
+#### Step 1: 触发 crash
+
+```bash
+# 点击"触发 Crash"按钮
+# app 立即崩溃
+```
+
+#### Step 2: 获取 logcat
+
+```bash
+# 完整 logcat
+adb logcat -d > logcat_crash.txt
+
+# 过滤 crash 信息
+adb logcat -d | grep -E "(FATAL|SIGNAL|tombstone|SIGSEGV|SIGABRT|SIGBUS)"
+
+# 获取最新一个 crash 的详细信息
+adb logcat -d -v threadtime | grep -A 30 "FATAL SIGNAL"
+```
+
+#### Step 3: 关键 logcat 信息解读
+
+```
+FATAL SIGNAL 11 (SIGSEGV) received by PID 12345
+...
+    #00 pc 0x0000000000000000  __abort_message
+    #01 pc 0x0000007a8b3c1234  /data/app/.../lib/arm64-v8a/libnative-crash-lib.so (NativeCrash.onNativeNullPointerDereference+0x1234)
+
+signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0
+```
+
+关键字段：
+- **FATAL SIGNAL**: 信号类型和编号
+- **fault addr**: 访问的无效地址
+  - `0x0` → 空指针解引用
+  - 非零但在栈范围 → 缓冲区溢出
+  - 非零堆地址 → Use-After-Free
+- **backtrace**: 调用栈，`pc` 是程序计数器地址
+
+#### Step 4: 使用 addr2line 还原堆栈
+
+```bash
+# 1. 找到 so 文件路径和偏移地址
+# logcat 中显示: libnative-crash-lib.so + 0x1234
+
+# 2. pull so 文件
+adb pull /data/app/.../lib/arm64-v8a/libnative-crash-lib.so ./
+
+# 3. 找到 addr2line 工具
+NDK_PATH=$ANDROID_HOME/ndk/29.0.14206865
+ADDR2LINE=$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-addr2line
+
+# 4. 还原地址到源码行号
+$ADDR2LINE -e libnative-crash-lib.so -f -C 0x1234
+# 输出类似:
+# Java_com_example_androidcrashanalysis_jni_NativeCrashBridge_triggerNullPointerDereference
+#     /path/to/native_crash.cpp:45
+
+# 5. 如果有多个地址，批量处理
+for offset in 0x1234 0x2345 0x3456; do
+    echo "=== $offset ==="
+    $ADDR2LINE -e libnative-crash-lib.so -f -C $offset
+done
+```
+
+### 信号类型速查
+
+| 信号 | 编号 | 含义 | 常见原因 |
+|-----|-----|------|---------|
+| SIGSEGV | 11 | 段错误 | 空指针、非法地址、栈溢出、UAF |
+| SIGABRT | 6 | 中止 | abort()、assert 失败、双重 free、canary 失败 |
+| SIGBUS | 10 | 总线错误 | 地址对齐问题、物理地址无效 |
+
+---
+
+## LeakCanary 使用指南
+
+LeakCanary 是 Square 出品的内存泄漏检测库，在 Debug 构建中自动工作。
+
+### 集成方式
+
+```kotlin
+// libs.versions.toml
+leakcanary = "2.14"
+leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
+
+// build.gradle.kts
+debugImplementation(libs.leakcanary.android)
+```
+
+### 工作原理
+
+1. **GC Root 追踪**: 监听 `Activity.onDestroy()`，在后台线程追踪 Activity 的 GC 路径
+2. **泄漏判定**: 5 秒后再次检查，如果仍可达 → 判定为泄漏
+3. **堆转储**: 泄漏发生时自动 dump heap，生成 `.hprof` 文件
+4. **分析**: 内置 Shark 引擎分析引用链
+5. **通知**: 推送通知展示泄漏信息
+
+### LeakCanary 能检测的类型
+
+- ✅ Activity 泄漏
+- ✅ Fragment 泄漏
+- ✅ View 泄漏
+- ✅ 任意 Java 对象泄漏
+- ❌ Native 层泄漏（需要 native heap 分析工具）
+- ❌ Bitmap 泄漏（因为触发的是 OOM 不是 GC root 追踪）
+
+### 常见 LeakCanary 引用链关键词
+
+| 引用链关键词 | 对应场景 |
+|------------|---------|
+| `MainActivity.\<init>\>` | 匿名内部类持有 Activity |
+| `companion object` | static 变量持有 Activity |
+| `Handler.\<init\>` | Handler 持有 Activity |
+| `MessageQueue.enqueueMessage` | 延迟消息未清理 |
+| `BroadcastReceiver` | Receiver 未反注册 |
+| `ContentObserver` | ContentObserver 未反注册 |
+| `View.onDetachedFromWindow` | 自定义 View 持有 Context |
+
+---
+
+## traces.txt 阅读指南
+
+`/data/anr/traces.txt` 是 ANR 的核心诊断文件，由系统自动生成。
+
+### 文件结构
+
+```
+----- pid 1234 at 2026-04-04 12:00:00 -----
+Cmd line: com.example.androidcrashanalysis
+Build: ... (设备信息)
+
+CPU core count: 8
+ABI: arm64-v8a
+
+"main" prio=5 tid=1 Sleeping          ← 主线程（tid=1）
+  | group="main" sCount=1 dsCount=0
+  at java.lang.Thread.sleep!(Native method)
+  at java.lang.Thread.sleep(Thread.java:373)
+  at MainThreadSleepScenarioKt.$triggerAnrBuggy$lambda-0(MainThreadSleepScenario.kt:45)
+
+"ReferenceQueueDaemon" prio=5 tid=5 Waiting
+  | group="system" sCount=1 dsCount=0
+  at java.lang.Object.wait(Object.java:-2)
+  ...
+
+----- Best trace (of 5) -----
+```
+
+### 线程状态速查
+
+| 状态 | 含义 | 正常/异常 |
+|-----|------|---------|
+| Runnable | 正在执行 | 正常（但占用 CPU）|
+| Sleeping | 调用了 sleep/wait | 可能阻塞 |
+| Blocked | 等锁 | 异常（可能死锁）|
+| Waiting | 等待条件 | 正常（等 notify）|
+| Native | 执行 native 代码 | 可能 IO/锁 |
+| Suspended | 被挂起 | 正常（GC 时）|
+
+### 分析死锁的关键信息
+
+```
+"main" prio=5 tid=1 Blocked
+  - waiting to lock <0x01234567> (Object A) held by thread 2
+  at ...
+
+"Thread-1" prio=5 tid=2 Blocked
+  - waiting to lock <0x08765432> (Object B) held by thread 1
+  at ...
+```
+
+→ **死锁判定**: 两个线程都在 Blocked 状态，互相等待对方持有的锁。
+
+### traces 分析流程
+
+```
+1. 找到 "main" 线程（tid=1）
+2. 查看状态（Runnable/Blocked/Sleeping）
+3. 找到阻塞位置的代码行号
+4. 根据状态判断根因：
+   - Sleeping → 是否有 sleep/delay 调用
+   - Blocked → 是否在等锁，看 waiting to lock 字段
+   - Runnable + CPU 高 → 是否有大量计算
+   - Runnable + CPU 低 → 是否有 IO
+5. 看其他线程状态（可能死锁）
+```
+
+---
+
+## hprof / MAT 分析步骤
+
+### 准备阶段
+
+```bash
+# 1. 获取 hprof（Android Studio Profiler 或 adb）
+adb shell am dumpheap com.example.androidcrashanalysis /data/local/tmp/heap.hprof
+adb pull /data/local/tmp/heap.hprof ./
+
+# 2. 转换格式
+$ANDROID_HOME/platform-tools/hprof-conv heap.hprof heap_converted.hprof
+```
+
+### MAT 核心操作
+
+#### 操作 1: Histogram（按类统计）
+
+```
+File -> Open Heap Dump -> heap_converted.hprof
+
+Histogram 视图:
+1. 输入框输入过滤词，如 "MainActivity"
+2. 对象列表显示:
+   - Class Name: 类名
+   - Objects: 实例数量
+   - Shallow Heap: 对象自身内存
+   - Retained Heap: 对象 + 引用对象总内存
+
+对比：
+- 旋转前: MainActivity = 1
+- 旋转后: MainActivity = 3 (泄漏了 2 个)
+```
+
+#### 操作 2: Path to GC Roots
+
+```
+1. 右键任意对象
+2. Path To GC Roots -> exclude weak/soft references
+3. 查看完整引用链：
+   Thread-123
+     at com.example.androidcrashanalysis.MainActivity.onCreate()
+     at android.app.Activity.performCreate()
+     at com.example.androidcrashanalysis.UnsafeActivityHolder.setActivity()
+       ^↑↑↑ static 变量持有引用！这就是 GC Root
+```
+
+#### 操作 3: Dominator Tree（支配树）
+
+```
+1. 选择 Dominator Tree 视图
+2. 按 Retained Heap 排序
+3. 找最大的对象，通常就是泄漏源头
+4. 展开查看引用关系
+```
+
+#### 操作 4: OQL 查询（SQL 风格的查询）
+
+```sql
+# 查询所有 Activity 实例
+SELECT * FROM INSTANCEOF android.app.Activity
+
+# 查询大于 1MB 的 ByteArray
+SELECT * FROM INSTANCEOF byte[] WHERE objectsize > 1048576
+
+# 查询持有特定 Activity 引用的对象
+SELECT * FROM INSTANCEOF java.lang.Object
+WHERE toString().matches(".*")
+  AND (reference.referent.@objectAddress == 0x7a8b3c1234)
+```
+
+### MAT 快捷键
+
+| 快捷键 | 功能 |
+|-------|------|
+| Ctrl+F | OQL 查询 |
+| Ctrl+Shift+O | 列出所有类 |
+| Ctrl+L | 列出所有 GC Root |
+| F5 | 展开引用 |
+| F4 | 查看对象详情 |
+| Ctrl+Shift+M | Regex 过滤 |
+
+---
+
+## addr2line / ndk-stack 使用
+
+### addr2line（精确到源码行）
+
+```bash
+# NDK 工具路径
+NDK=/Users/wanghao/Library/Android/sdk/ndk/29.0.14206865
+TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
+
+ADDR2LINE=$TOOLCHAIN/llvm-addr2line
+NM=$TOOLCHAIN/llvm-nm
+OBJDUMP=$TOOLCHAIN/llvm-objdump
+
+# 基本用法：地址 -> 文件:行号
+$ADDR2LINE -e libnative-crash-lib.so -f -C 0x1a3c
+# 输出:
+# Java_com_example_androidcrashanalysis_jni_NativeCrashBridge_triggerNullPointerDereference
+# /path/to/native_crash.cpp:45
+
+# 批量还原（从 logcat 提取所有地址）
+echo "0x1a3c 0x2345 0x3456" | while read addr; do
+    echo "--- $addr ---"
+    $ADDR2LINE -e libnative-crash-lib.so -f -C $addr
+done
+```
+
+### ndk-stack（直接分析 logcat）
+
+```bash
+# 方式1: 从 logcat 文件分析
+adb logcat > logcat.txt
+$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/ndk-stack \
+    -sym /path/to/obj/local/arm64-v8a/libnative-crash-lib.so \
+    -d logcat.txt
+
+# 输出示例:
+# ******* Crash dump: *******
+# Build fingerprint: '...'
+# #00 pc 0x0000000000001234  libnative-crash-lib.so (triggerNullPointer+0x34)
+# #01 pc 0x0000000000001567  libnative-crash-lib.so (Java_com_example_androidcrashanalysis_jni_NativeCrashBridge_triggerNullPointerDereference+0x67)
+#   at com.example.androidcrashanalysis.jni.NativeCrashBridge.nativeCrash(Native method)
+
+# 方式2: 实时分析（结合 grep）
+adb logcat | $NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/ndk-stack \
+    -sym /path/to/obj/local/arm64-v8a/libnative-crash-lib.so
+```
+
+### 完整分析脚本
+
+```bash
+#!/bin/bash
+# analyze_native_crash.sh
+
+NDK="$ANDROID_HOME/ndk/29.0.14206865"
+ADDR2LINE="$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-addr2line"
+SO_FILE="libnative-crash-lib.so"
+
+echo "=== Native Crash 地址还原 ==="
+echo "使用 addr2line 还原堆栈..."
+echo
+
+# 从 logcat 提取 backtrace 中的地址（以 #XX pc 开头）
+adb logcat -d | grep "^    #" | while read line; do
+    addr=$(echo "$line" | grep -oE "0x[0-9a-f]+")
+    if [ -n "$addr" ]; then
+        echo "地址: $addr"
+        $ADDR2LINE -e "$SO_FILE" -f -C "$addr" 2>/dev/null || echo "无法还原"
+        echo
+    fi
+done
+```
+
+---
+
+## 面试话术模板
+
+### OOM 问题框架：发现→定位→解决→预防
+
+```
+【发现】
+在测试中发现 XX 场景下，连续旋转屏幕 N 次后应用崩溃。
+查看 logcat: java.lang.OutOfMemoryError: Failed to allocate...
+
+【定位】
+1. 通过 LeakCanary 确定泄漏类型为 Activity 泄漏
+2. MAT Histogram 对比：旋转前 MainActivity=1，旋转后=3
+3. Path to GC Roots 找到 GC Root: companion object.leakedActivityRef
+4. 根因：static 变量持有 Activity 强引用
+
+【解决】
+使用 WeakReference 包裹 Activity 引用：
+  companion object {
+      var ref = WeakReference<Activity>(null)
+  }
+并确保在 onDestroy 中清空引用。
+
+验证：旋转 10 次后，MainActivity 始终=1，LeakCanary 不再报警。
+
+【预防】
+- Code Review 检查：禁止在 static/singleton 中持有非静态内部类引用
+- 引入 Lint 规则检测 static Handler
+- CI 集成 LeakCanary 自动化测试
+- 定期使用 MAT 进行堆分析
+```
+
+### ANR 问题框架
+
+```
+【发现】
+用户在 XX 场景下操作时，应用无响应，弹出 ANR 对话框。
+
+【定位】
+1. adb pull /data/anr/traces.txt
+2. 查看 main 线程状态：Blocked/Sleeping
+3. traces 显示：
+   "main" prio=5 tid=1 Blocked
+     waiting to lock <0x...> held by thread 2
+   "Thread-1" prio=5 tid=2 Blocked
+     waiting to lock <0x...> held by thread 1
+4. 结论：死锁（交叉等锁）
+
+【解决】
+统一加锁顺序：所有线程都按 A→B 顺序获取锁。
+代码审查中引入死锁检测工具（如 ThreadSanitizer）。
+
+【预防】
+- StrictMode: 线上开启 ThreadPolicy 严格模式
+- 监控: 使用 BlockCanary 监控主线程卡顿
+- 规范: 禁止主线程执行 IO/网络操作
+- 测试: ANR monkey 测试
+```
+
+### Native Crash 问题框架
+
+```
+【发现】
+用户在 XX 场景下应用闪退。
+adb logcat: FATAL SIGNAL 11 (SIGSEGV)
+
+【定位】
+1. 过滤 tombstone: adb logcat | grep SIGSEGV
+2. 查看 fault addr = 0x0 → 空指针解引用
+3. addr2line 还原：
+   Java_com_...NativeCrashBridge.triggerNullPointer+0x34
+   native_crash.cpp:45
+4. 根因：C++ 中对 nullptr 解引用
+
+【解决】
+在解引用前添加空指针检查：
+  if (ptr != nullptr) {
+      *ptr = 42;
+  }
+
+使用智能指针（std::unique_ptr）替代裸指针，
+让编译器自动管理内存生命周期。
+
+【预防】
+- 引入 AddressSanitizer (ASAN) 到 CI 流程
+- 启用 -fsanitize=address 编译选项（仅 Debug）
+- Code Review 关注所有指针操作
+- 使用 Clang Static Analyzer 检测空指针
+```
+
+### 综合对比表
+
+| 维度 | OOM | ANR | Native Crash |
+|-----|-----|-----|-------------|
+| 根因 | 内存泄漏 / 大对象 | 主线程阻塞 | 非法内存访问 |
+| 表现 | 崩溃 | 无响应对话框 | SIGSEGV 闪退 |
+| 工具 | LeakCanary, MAT | traces.txt | logcat, addr2line |
+| 修复难度 | 中（引用链清晰）| 高（死锁难复现）| 中（行号明确）|
+| 预防 | LeakCanary CI | StrictMode | ASAN / UBSan |
