@@ -30,6 +30,21 @@ import com.example.androidcrashanalysis.ui.theme.NativePurple
  *
  * 【问题】
  * memcpy 写入超出栈缓冲区边界，触发 SIGABRT/SIGSEGV
+ *
+ * 【触发核心逻辑 — JNI 调用】
+ * NativeCrashBridge.triggerBufferOverflow() → JNI → C++ 代码：
+ *     char buffer[10];                        // 栈上 10 字节
+ *     memcpy(buffer, src, strlen(src));        // src > 10 字节 → 栈溢出
+ *
+ * 【后果分析】
+ * - 覆盖 buffer 之后的栈内存：saved PC、registers 等
+ * - 破坏栈帧 → return address 被覆盖 → SIGABRT（Stack Canary 检测到）
+ * - 或 SIGSEGV（访问到非法地址）
+ *
+ * 【日志特征】
+ * - FATAL SIGNAL 6 (SIGABRT) 或 11 (SIGSEGV)
+ * - fault addr 在栈地址范围内（0x7fff_xxxx）
+ * - backtrace 中能看到 memcpy 调用
  */
 @Composable
 fun BufferOverflowScreen(onBack: () -> Unit) {

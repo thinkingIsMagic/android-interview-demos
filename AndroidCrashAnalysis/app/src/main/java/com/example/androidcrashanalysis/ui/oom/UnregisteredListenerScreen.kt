@@ -38,6 +38,21 @@ import com.example.androidcrashanalysis.ui.theme.OomRed
  *
  * 【修复方案】
  * 使用 DisposableEffect，在 onDispose 中调用 unregisterReceiver
+ *
+ * 【触发核心逻辑】
+ * 问题版本: DisposableEffect.onDispose { /* 空实现 */ }
+ *   → registerReceiver 后 onDispose 是空实现 → Receiver 永远持有 Activity 引用 → 泄漏
+ *
+ * 修复版本: DisposableEffect.onDispose { unregisterReceiver(receiver) }
+ *   → 退出页面时自动调用 onDispose → unregisterReceiver → 引用链断开 → 无泄漏
+ *
+ * 【引用链分析】
+ * 系统广播服务
+ *   → BroadcastReceiver 注册表（持有 receiver 引用）
+ *     → receiver（匿名内部类，持有外部 Activity 引用）
+ *       → Activity（被泄漏）
+ *
+ * 当 Activity 需要回收时，发现引用链仍存在 → 无法 GC → 泄漏
  */
 @Composable
 fun UnregisteredListenerScreen(onBack: () -> Unit) {

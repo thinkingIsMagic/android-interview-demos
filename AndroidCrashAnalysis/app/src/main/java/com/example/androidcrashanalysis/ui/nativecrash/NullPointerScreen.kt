@@ -34,6 +34,16 @@ import com.example.androidcrashanalysis.ui.theme.NativePurple
  *
  * 【修复方案】
  * 防御性编程：使用前检查指针是否为 nullptr
+ *
+ * 【触发核心逻辑 — JNI 调用】
+ * NativeCrashBridge.triggerNullPointerDereference() → JNI → C++ 代码：
+ *     int* ptr = nullptr;
+ *     *ptr = 42;  // ← 解引用 0x0 → SIGSEGV
+ *
+ * 【日志特征】
+ * - FATAL SIGNAL 11 (SIGSEGV)
+ * - fault addr: 0x0  ← 空指针的特征地址
+ * - 与 UAF 的区别：UAF 的 fault addr 是非零地址
  */
 @Composable
 fun NullPointerScreen(onBack: () -> Unit) {

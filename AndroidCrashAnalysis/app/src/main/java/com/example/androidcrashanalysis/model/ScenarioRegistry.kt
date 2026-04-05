@@ -316,11 +316,27 @@ object ScenarioRegistry {
                 2. 观察内存增长
                 3. 点击"手动 GC"，修复关闭时内存不下降
 
-                【MAT 分析重点】
-                1. Histogram 视图 -> Byte[] 过滤
-                2. 按数量排序，观察是否存在大量 1MB 左右的数组
-                3. Path To GC Roots -> exclude weak/soft
-                   找到 LeakStore.leakList 作为 GC Root
+                【MAT 分析（点击"触发泄漏"50次后导出 hprof）】
+
+                第一步：确认 byte[] 异常
+                → 打开 Histogram，byte[] 排第一
+                → 143,846 个对象，Retained Heap 198MB → 这就是主犯
+
+                第二步：过滤出 1MB 的大数组
+                → 右键 byte[] → List objects → with outgoing references
+                → 列表出来后点 Shallow Heap 列头排序
+                → 找 size ≈ 1,048,576（1MB）的条目，看有多少个
+
+                第三步：查引用链
+                → 选中任意一个 1MB 的 byte[]
+                → 右键 → Path To GC Roots → exclude all phantom/weak/soft
+                → 显示持有该数组的强引用链
+                → 顺着链往上找，最终会指向某个 List / ArrayList
+
+                第四步（最快）：直接看 Leak Suspects
+                → 点顶部 Overview tab → Leak Suspects 报告
+                → MAT 直接告诉你 "Problem suspect 1: xxx 持有 198MB"
+                → 比手动翻快，直接定位到 LeakStore.leakList
 
                 【修复验证】
                 开启修复后：

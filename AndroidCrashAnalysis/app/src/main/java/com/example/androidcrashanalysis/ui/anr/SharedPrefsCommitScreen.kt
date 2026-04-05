@@ -39,6 +39,27 @@ import kotlinx.coroutines.launch
  *
  * 【修复方案】
  * 99% 场景使用 apply()（异步写入），只有必须知道写入结果时才用 commit()。
+ *
+ * 【触发核心逻辑】
+ * 问题版本: repeat(1000) { sp.edit().putString(...).commit() }
+ *   → commit() 底层: 写入 SharedPreferencesImpl.java
+ *   → writeToDisk() → FileOutputStream.write() → fsync()
+ *   → 每次都同步等待磁盘写入完成
+ *   → 1000 次 × 约 5-10ms/次 = 5-10 秒阻塞
+ *   → 主线程被卡住 5 秒以上 → ANR
+ *
+ * 修复版本: repeat(1000) { sp.edit().putString(...).apply() }
+ *   → apply() 立即返回（写入内存后即完成）
+ *   → QueuedWork.singletonQueue 持有 Runnable，后台线程负责写入磁盘
+ *   → 主线程无阻塞 → 无 ANR
+ *
+ * 【commit vs apply 关键区别】
+ * | 特性 | commit() | apply() |
+ * |------|---------|---------|
+ * | 写入时机 | 同步，立即写入磁盘 | 异步，后台线程写入 |
+ * | 返回值 | boolean (success/fail) | void |
+ * | 阻塞主线程 | ✅ 是 | ❌ 否 |
+ * | 使用场景 | 需要知道写入结果时 | 绝大多数场景 |
  */
 @Composable
 fun SharedPrefsCommitScreen(onBack: () -> Unit) {

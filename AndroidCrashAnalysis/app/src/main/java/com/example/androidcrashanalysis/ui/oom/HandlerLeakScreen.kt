@@ -30,17 +30,37 @@ import com.example.androidcrashanalysis.ui.common.getMemorySnapshot
 import com.example.androidcrashanalysis.ui.theme.OomRed
 import java.lang.ref.WeakReference
 
+// ========== 问题版本：匿名内部类 Handler 持有外部引用 ==========
+//
+// 【触发原理】
+// 匿名内部类 Handler 会隐式持有外部类（Activity）的引用。
+// sendEmptyMessageDelayed 将 Message 放入 MessageQueue，延迟 delayMs 毫秒。
+// 引用链：MessageQueue → Message → Handler(匿名类) → Activity
+// 在延迟消息被处理前，Activity 无法被 GC 回收。
+//
+// 【泄漏条件】
+// DisposableEffect 的 onDispose 是空实现 → Message 永远留在队列中 → 永久泄漏。
+// 退出页面后 GC，Activity 仍在内存中。
 private object UnsafeLeakHandler {
     private var handler: Handler? = null
     fun sendDelayed(ctx: android.content.Context, delayMs: Long) {
         handler = object : Handler(Looper.getMainLooper()) {
+            // 匿名内部类：隐式持有外部 Activity 的引用
             override fun handleMessage(msg: Message) { super.handleMessage(msg) }
         }
         handler?.sendEmptyMessageDelayed(1, delayMs)
+        // ❌ DisposableEffect.onDispose 为空 → Message 永不清理
     }
     fun cleanup() { handler = null }
 }
 
+// ========== 修复版本：静态 Handler + WeakReference + 手动清理 ==========
+//
+// 【修复原理】
+// 1. SafeHandler 改为 static 内部类 → 不持有外部 Activity 引用
+// 2. 通过 WeakReference 持有 Activity（可选，仅当需要操作 UI 时）
+// 3. onDispose 中调用 removeCallbacksAndMessages(null) 移除所有消息
+//    → MessageQueue 中不再有 pending message → Activity 可被 GC 回收
 private object SafeLeakHandler {
     private var handler: SafeHandler? = null
     fun sendDelayed(ctx: android.content.Context, delayMs: Long) {
@@ -49,13 +69,16 @@ private object SafeLeakHandler {
         handler?.postDelayed({}, delayMs)
     }
     fun cleanup() {
+        // ✅ 移除所有与该 Handler 关联的回调和消息
         handler?.removeCallbacksAndMessages(null)
         handler = null
     }
     private class SafeHandler(
         looper: Looper,
         private val activityRef: WeakReference<android.app.Activity?>
-    ) : Handler(looper)
+    ) : Handler(looper) {
+        // static 内部类：不持有外部 Activity 引用
+    }
 }
 
 @Composable

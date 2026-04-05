@@ -34,6 +34,16 @@ import com.example.androidcrashanalysis.ui.theme.OomRed
  * 【修复方案】
  * 1. 设置集合容量上限（MAX_SIZE）
  * 2. 超出容量时移除最老的元素（FIFO）
+ *
+ * 【触发核心逻辑】
+ * 问题版本: UnsafeLeakStore.store(ByteArray(1MB))
+ *   → 每次 store() 在 leakList 末尾追加 1MB 数组
+ *   → leakList 永不清理，大小从 0 → 50 → 100 → ... 无上限
+ *   → GC 无法回收（leakList 单例是 GC Root）
+ *
+ * 修复版本: SafeLeakStore.store(ByteArray(1MB))
+ *   → size >= 100 时 removeAt(0)，移除最老的
+ *   → 内存始终控制在 MAX_SIZE × 1MB = 100MB 以内
  */
 @Composable
 fun CollectionLeakScreen(onBack: () -> Unit) {
@@ -175,12 +185,21 @@ fun CollectionLeakScreen(onBack: () -> Unit) {
     )
 }
 
-// ========== 问题版本：无容量限制 ==========
+// ========== 问题版本：单例集合无容量限制 ==========
+//
+// 【触发原理】
+// UnsafeLeakStore 是全局单例（object），生命周期 = 进程生命周期。
+// leakList.add(data) 持续追加 1MB 的 ByteArray，但从不清理。
+// GC 后 leakList 仍持有所有 ByteArray 引用 → 无法回收 → 内存持续增长 → OOM。
+//
+// 【为什么 GC 不起作用】
+// leakList 本身是 GC Root（单例），内部的 ByteArray[] 形成强引用链。
+// GC 只能回收不在引用链上的对象，而 leakList 永远在引用链上。
 private object UnsafeLeakStore {
     private val leakList = mutableListOf<ByteArray>()
 
     fun store(data: ByteArray) {
-        leakList.add(data)
+        leakList.add(data) // ❌ 只增不减，内存持续增长
     }
 
     fun size(): Int = leakList.size
@@ -190,14 +209,20 @@ private object UnsafeLeakStore {
     }
 }
 
-// ========== 修复版本：容量上限 ==========
+// ========== 修复版本：容量上限 + FIFO 淘汰 ==========
+//
+// 【修复原理】
+// 1. MAX_SIZE = 100 设置容量上限，防止无限增长
+// 2. size >= MAX_SIZE 时 removeAt(0)，移除最老的元素（FIFO）
+// 3. 内存占用始终控制在 MAX_SIZE * 1MB ≈ 100MB 以内
+// 4. clearAll() 提供手动清理入口，在页面退出时调用
 private object SafeLeakStore {
-    private val MAX_SIZE = 100
+    private val MAX_SIZE = 100 // ✅ 容量上限
     private val safeList = mutableListOf<ByteArray>()
 
     fun store(data: ByteArray) {
         if (safeList.size >= MAX_SIZE) {
-            safeList.removeAt(0)
+            safeList.removeAt(0) // ✅ 超容量时淘汰最老的
         }
         safeList.add(data)
     }
@@ -205,6 +230,6 @@ private object SafeLeakStore {
     fun size(): Int = safeList.size
 
     fun clearAll() {
-        safeList.clear()
+        safeList.clear() // ✅ 提供清理方法
     }
 }

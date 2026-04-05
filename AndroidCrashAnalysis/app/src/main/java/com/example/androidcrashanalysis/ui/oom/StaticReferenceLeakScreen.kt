@@ -27,13 +27,25 @@ import com.example.androidcrashanalysis.ui.common.getMemorySnapshot
 import com.example.androidcrashanalysis.ui.theme.OomRed
 import java.lang.ref.WeakReference
 
-// ========== 问题版本：强引用持有 Activity ==========
+// ========== 问题版本：static 强引用持有 Activity ==========
+//
+// 【触发原理】
+// companion object 中的 static 变量是 GC Root，生命周期 = 进程生命周期。
+// heldActivity = context 这行代码让 static 变量直接持有 Activity 引用。
+// 当 Activity.onDestroy() 后，GC 仍无法回收（因为 static 强引用链存在）。
+// 旋转屏幕 N 次 → N 个旧 Activity 无法回收 → Java 堆耗尽 → OOM。
+//
+// 【修复原理】
+// WeakReference 不阻碍 GC。GC 发现对象只被 WeakReference 持有时，
+// 会直接回收，WeakReference.get() 返回 null。
 private object UnsafeActivityHolder {
+    // ❌ static 强引用：Activity 生命周期被强制延长到进程结束
     var heldActivity: Activity? = null
 }
 
-// ========== 修复版本：弱引用持有 Activity ==========
+// ========== 修复版本：WeakReference 持有 Activity ==========
 private object SafeActivityHolder {
+    // ✅ WeakReference：允许 GC 在适当时候回收 Activity
     var heldRef: WeakReference<Activity>? = null
 }
 

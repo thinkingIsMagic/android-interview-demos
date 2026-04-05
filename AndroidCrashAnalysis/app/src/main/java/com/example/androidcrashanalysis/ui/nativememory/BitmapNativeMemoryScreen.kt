@@ -42,6 +42,14 @@ import com.example.androidcrashanalysis.ui.theme.NativeMemoryBlue
  * 1. 使用 inSampleSize 压缩图片尺寸（如 1024x1024 = 4MB）
  * 2. 加载前检查 Native 可用内存
  * 3. 及时 recycle() 释放 Bitmap
+ *
+ * 【触发核心逻辑】
+ * 问题版本: repeat(20) { Bitmap.createBitmap(4096,4096) × eraseColor }
+ *   - 20 张 × 64MB = 1.28GB → Native 堆耗尽 → LMK SIGKILL
+ *   - 注意：不会抛出 Java OutOfMemoryError，进程直接消失
+ *
+ * 修复版本: Bitmap.createBitmap(1024,1024)
+ *   - 1024×1024×4 = 4MB/张 → 内存压力大幅降低
  */
 @Composable
 fun BitmapNativeMemoryScreen(onBack: () -> Unit) {

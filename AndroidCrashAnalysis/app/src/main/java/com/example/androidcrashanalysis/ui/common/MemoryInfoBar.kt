@@ -55,22 +55,6 @@ fun MemoryInfoBar(
                 fontWeight = FontWeight.Bold
             )
 
-            // === Native 堆（Bitmap 实际在此）===
-            SectionHeader("🖼️ Native 堆（Bitmap 所在）")
-            MemoryBar(
-                used = nativeAllocated,
-                max = nativeSize,
-                label = "Native"
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("已分配: ${formatBytes(nativeAllocated)}", style = MaterialTheme.typography.labelSmall)
-                Text("总大小: ${formatBytes(nativeSize)}", style = MaterialTheme.typography.labelSmall)
-                Text("空闲: ${formatBytes(nativeSize - nativeAllocated)}", style = MaterialTheme.typography.labelSmall)
-            }
-
             // === Java 堆 ===
             SectionHeader("☕ Java 堆")
             MemoryBar(
@@ -85,6 +69,22 @@ fun MemoryInfoBar(
                 Text("已用: ${formatBytes(javaUsed)}", style = MaterialTheme.typography.labelSmall)
                 Text("最大: ${formatBytes(javaMax)}", style = MaterialTheme.typography.labelSmall)
                 Text("空闲: ${formatBytes(javaFree)}", style = MaterialTheme.typography.labelSmall)
+            }
+
+            // === Native 堆（Bitmap 实际在此）===
+            SectionHeader("🖼️ Native 堆（Bitmap 所在）")
+            MemoryBar(
+                used = nativeAllocated,
+                max = nativeSize,
+                label = "Native"
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("已分配: ${formatBytes(nativeAllocated)}", style = MaterialTheme.typography.labelSmall)
+                Text("总大小: ${formatBytes(nativeSize)}", style = MaterialTheme.typography.labelSmall)
+                Text("空闲: ${formatBytes(nativeSize - nativeAllocated)}", style = MaterialTheme.typography.labelSmall)
             }
 
             // 提示

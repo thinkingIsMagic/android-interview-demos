@@ -31,6 +31,22 @@ import com.example.androidcrashanalysis.ui.theme.NativePurple
  * 【问题】
  * free() 后继续使用指针，触发 SIGSEGV
  * fault addr = 非零地址（与空指针的区别）
+ *
+ * 【触发核心逻辑 — JNI 调用】
+ * NativeCrashBridge.triggerUseAfterFree() → JNI → C++ 代码：
+ *     int* ptr = (int*)malloc(sizeof(int));
+ *     *ptr = 42;
+ *     free(ptr);        // ← 释放内存
+ *     *ptr = 100;        // ← 继续使用已释放的地址 → SIGSEGV
+ *
+ * 【关键区分：UAF vs 空指针】
+ * - 空指针: fault addr = 0x0
+ * - UAF:    fault addr = 非零有效地址（已释放的堆地址）
+ *
+ * 【危险原因】
+ * - free 后内存可能被重新分配给其他对象
+ * - UAF 可能导致读取到脏数据，或写入覆盖其他对象的数据
+ * - 经典的内存安全漏洞，可被利用进行任意代码执行
  */
 @Composable
 fun UseAfterFreeScreen(onBack: () -> Unit) {

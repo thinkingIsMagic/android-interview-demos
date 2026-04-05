@@ -35,6 +35,22 @@ import kotlinx.coroutines.launch
  * 【修复方案】
  * 使用 Dispatchers.IO 在子线程执行 sleep。
  * 注意：Handler.postDelayed 是安全的（不占用 CPU），但 Thread.sleep 不安全。
+ *
+ * 【触发核心逻辑】
+ * 问题版本: Thread.sleep(15000)
+ *   → 直接在当前线程（主线程）执行
+ *   → 阻塞 15 秒内无法响应任何用户输入
+ *   → 系统等待 5 秒无响应 → 弹出 ANR 对话框
+ *
+ * 修复版本: CoroutineScope(Dispatchers.IO).launch { delay(15000) }
+ *   → 协程在 IO 线程池执行，不占用主线程
+ *   → delay() 底层基于 Selector，不消耗 CPU
+ *   → 主线程完全无感知，可正常响应用户操作
+ *
+ * 【关键区分】
+ * Thread.sleep(15000) → ❌ 阻塞线程，消耗 CPU 资源（线程处于 WAITING 状态）
+ * Handler.postDelayed({ }, 15000) → ✅ 不阻塞，只是注册一个延时任务
+ * delay(15000) → ✅ 协程挂起，不阻塞线程，底层基于 epoll/selector
  */
 @Composable
 fun MainThreadSleepScreen(onBack: () -> Unit) {

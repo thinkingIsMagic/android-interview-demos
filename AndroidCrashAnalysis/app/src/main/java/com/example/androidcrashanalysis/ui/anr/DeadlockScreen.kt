@@ -110,13 +110,24 @@ fun DeadlockScreen(onBack: () -> Unit) {
     )
 }
 
-// ========== 问题版本：交叉加锁 ==========
-/**
- * 触发死锁
- * 主线程: lock(A) → lock(B)
- * 子线程: lock(B) → lock(A)
- * 互相等待 → 死锁
- */
+// ========== 问题版本：交叉加锁形成死锁 ==========
+//
+// 【触发原理 — 死锁四要素】
+// 1. 互斥：锁 A 和锁 B 只能被一个线程持有
+// 2. 持有并等待：主线程持有 A 还想要 B，子线程持有 B 还想要 A
+// 3. 不可抢占：锁不能被强制释放
+// 4. 循环等待：主线程等 B，子线程等 A → 形成环路
+//
+// 【时序】
+// 1. 主线程: synchronized(LockA) → 获得锁 A
+// 2. CoroutineScope: synchronized(LockB) → 获得锁 B
+// 3. 主线程: 尝试 synchronized(LockB) → 等待锁 B 释放
+// 4. 子线程: 尝试 synchronized(LockA) → 等待锁 A 释放
+// 5. 互相等待，永不解锁 → 死锁 → ANR
+//
+// 【traces.txt 中的特征】
+// "main" tid=1 Blocked  waiting to lock <A> held by Thread-1
+// "Thread-1" tid=2 Blocked  waiting to lock <B> held by main
 private fun triggerBuggyDeadlock() {
     // 在主线程执行（会触发 ANR）
     synchronized(LockA) {
@@ -130,14 +141,16 @@ private fun triggerBuggyDeadlock() {
 }
 
 // ========== 修复版本：统一加锁顺序 ==========
-/**
- * 修复死锁
- * 所有线程都遵守 A→B 顺序
- * 不会形成环路 → 无死锁
- */
+//
+// 【修复原理】
+// 核心原则：所有线程按相同顺序获取多个锁。
+// 统一为 A→B 顺序后，不存在"等对方释放"的环路：
+// - 主线程: A → B → 完成 → 释放 A → 释放 B
+// - 子线程: A（等主线程释放）→ B（等主线程释放）→ 完成
+// 不会形成循环等待 → 无死锁
 private fun triggerFixedDeadlock() {
     CoroutineScope(Dispatchers.Default).launch {
-        // 子线程: A → B（统一顺序）
+        // 子线程: A → B（统一顺序，与主线程一致）
         synchronized(LockA) {
             synchronized(LockB) {
                 // 正常工作

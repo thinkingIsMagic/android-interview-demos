@@ -37,6 +37,23 @@ import java.io.File
  *
  * 【修复方案】
  * 使用 Dispatchers.IO 在子线程执行文件操作。
+ *
+ * 【触发核心逻辑】
+ * 问题版本: File("xxx.bin").readBytes()
+ *   → 在当前线程（主线程）执行同步 IO
+ *   → 50MB 文件在低端设备上可能需要 3-10 秒
+ *   → 阻塞期间主线程无法响应 → ANR
+ *
+ * 修复版本: CoroutineScope(Dispatchers.IO).launch {
+ *              val data = withContext(Dispatchers.IO) { file.readBytes() }
+ *            }
+ *   → IO 操作在 Dispatchers.IO 线程池执行
+ *   → 主线程继续处理 UI 事件，完全无感知
+ *
+ * 【为什么 Dispatchers.IO 适合 IO】
+ * IO 操作特点是等待时间长、CPU 占用低。
+ * Dispatchers.IO 底层使用共享线程池，并发数 ≈ CPU核心数 × 2，
+ * 适合处理大量并发的网络/磁盘 IO。
  */
 @Composable
 fun LargeFileIoScreen(onBack: () -> Unit) {
