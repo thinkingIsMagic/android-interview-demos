@@ -203,77 +203,78 @@ object ScenarioRegistry {
         ),
         Scenario(
             id = "oom_bitmap",
-            title = "Bitmap 大图 OOM",
-            description = "循环加载大尺寸 Bitmap 不释放，直接触发堆内存溢出",
-            category = ScenarioCategory.OOM,
+            title = "Native 内存耗尽",
+            description = "循环创建大 Bitmap 耗尽 Native 堆，触发 LMK 杀进程",
+            category = ScenarioCategory.NATIVE_MEMORY,
             dangerLevel = 5,
             explanationText = """
+                【重要区分】
+                本场景演示的是 Native 内存耗尽导致 LMK 杀进程，
+                而非 Java 堆耗尽导致的 OutOfMemoryError。
+
+                两者的本质区别：
+
+                | | Java OOM | LMK 杀进程 |
+                |---|---|---|
+                | 堆类型 | Java 堆 | Native 堆 |
+                | 触发结果 | OutOfMemoryError | SIGKILL（进程消失）|
+                | 可捕获性 | ✅ 可 catch | ❌ 无法捕获 |
+                | 日志特征 | java.lang.OutOfMemoryError | 无堆栈，进程突然消失 |
+
                 【问题原理】
-                Bitmap 是 Android 中内存占用最大的对象之一。
+                Bitmap 的像素数据分配在 Native 堆，而非 Java 堆。
+                当 Native 堆耗尽时，系统会触发 Low Memory Killer（LMK），
+                直接向进程发送 SIGKILL，进程无法做任何处理直接消失。
 
                 计算公式：宽 × 高 × 每像素字节数
                 例如：4096 × 4096 × 4 bytes (ARGB_8888) = 64 MB
 
-                一张图就占 64MB，多张就会 OOM。
+                Native 堆大小通常远大于 Java 堆，
+                但仍有限制（取决于设备配置）。
 
-                问题代码：
-                    val bitmaps = mutableListOf<Bitmap>()
-                    while (true) {
-                        // 每循环增加约 64MB
-                        bitmaps.add(Bitmap.createBitmap(4096, 4096, Bitmap.Config.ARGB_8888))
-                    }
-
-                Android 默认应用堆大小：
-                - 32-bit: 256MB（低端机可能 128MB）
-                - 64-bit: 512MB+
-
-                循环创建 4-8 张 4096x4096 图片就会触发 OOM。
+                【为什么会触发 LMK】
+                Native 堆持续增长 → 系统检测到内存压力
+                → LMK 优先杀掉高内存占用的进程 → 进程被 SIGKILL
             """.trimIndent(),
             investigationMethod = """
                 【排查步骤】
-                1. 点击"触发泄漏"，观察内存快速增长
-                2. 点击"查看当前内存"，观察 usedMemory 逼近 maxMemory
-                3. OOM 发生时 app 会崩溃
+                1. 点击"触发 LMK"，观察 app 可能直接消失
+                2. 如果没有消失，点击"查看内存"观察 native 堆变化
+                3. app 消失后，logcat 中无 Java 堆栈
 
-                【验证修复效果】
-                开启修复版本后，每次加载 Bitmap 前会检查内存：
-                - 计算可用内存是否足够
-                - 对不需要的 Bitmap 调用 bitmap.recycle()
-                - 使用 inSampleSize 压缩图片尺寸
+                【关键命令】
+                # 观察进程内存使用
+                adb shell dumpsys meminfo com.example.androidcrashanalysis
 
-                【Bitmap 优化技巧】
-                - inSampleSize=2 → 宽高各缩小一半，内存缩小为 1/4
-                - RGB_565 替代 ARGB_8888：每像素 2 bytes（半内存）
-                - 及时 recycle()：但注意 recycle 后不能使用
-                - 使用 BitmapFactory.Options.inBitmap 复用已有 Bitmap
+                # 观察 Native 堆分配
+                adb shell dumpsys meminfo -n com.example.androidcrashanalysis | grep "Native"
+
+                # LMK 杀进程时，logcat 会打印：
+                # "进程被 low memory killer 杀掉"
+
+                【如何区分 LMK 和 Java OOM】
+                - Java OOM: logcat 有 "java.lang.OutOfMemoryError" 堆栈
+                - LMK: 进程突然消失，logcat 无异常堆栈，只有 "Sending signal. PID: xxx SIG: 9"
             """.trimIndent(),
             fixDescription = """
-                【修复方案】内存检查 + 及时回收 + 尺寸压缩
+                【修复方案】Native 内存优化策略
 
-                private val bitmapCache = mutableListOf<Bitmap>()
+                1. 减小 Bitmap 尺寸
+                   - 使用 inSampleSize 压缩：inSampleSize=2 → 内存 1/4
+                   - 使用 RGB_565 替代 ARGB_8888：内存减半
 
-                fun loadBitmapFixed(context: Context): Bitmap? {
-                    // Step 1: 加载前检查内存
-                    val runtime = Runtime.getRuntime()
-                    val freeMemory = runtime.freeMemory()
-                    val neededMemory = 64L * 1024 * 1024 // 预估 64MB
+                2. 及时释放
+                   - 不再使用后调用 bitmap.recycle()
+                   - 注意：recycle 后不能再访问
 
-                    if (freeMemory < neededMemory) {
-                        // 内存不足时，先回收缓存中的旧 Bitmap
-                        bitmapCache.forEach { it.recycle() }
-                        bitmapCache.clear()
-                        System.gc()
-                        return null
-                    }
+                3. 加载前检查
+                   - 计算目标 Bitmap 所需内存
+                   - 检查当前可用内存是否足够
+                   - 不足时先释放旧的 Bitmap
 
-                    // Step 2: 使用 inSampleSize 压缩
-                    val options = BitmapFactory.Options().apply {
-                        inSampleSize = 4 // 宽高各缩小 4 倍，内存缩小 16 倍
-                    }
-
-                    // 修复版本加载小图
-                    return Bitmap.createBitmap(1024, 1024, Bitmap.Config.ARGB_8888)
-                }
+                4. 使用 BitmapPool
+                   - BitmapFactory.Options.inBitmap 复用已有 Bitmap
+                   - 减少反复分配/释放带来的内存碎片
             """.trimIndent()
         ),
         Scenario(

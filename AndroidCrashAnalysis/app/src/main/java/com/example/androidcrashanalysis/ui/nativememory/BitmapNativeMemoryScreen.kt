@@ -1,4 +1,4 @@
-package com.example.androidcrashanalysis.ui.oom
+package com.example.androidcrashanalysis.ui.nativememory
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import kotlin.random.Random
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,22 +26,25 @@ import com.example.androidcrashanalysis.model.ScenarioRegistry
 import com.example.androidcrashanalysis.ui.common.MemoryInfoBar
 import com.example.androidcrashanalysis.ui.common.getMemorySnapshot
 import com.example.androidcrashanalysis.ui.common.ScenarioScaffold
-import com.example.androidcrashanalysis.ui.theme.OomRed
+import com.example.androidcrashanalysis.ui.theme.NativeMemoryBlue
 
 /**
- * 场景：Bitmap 大图 OOM
+ * 场景：Native 内存耗尽（LMK 杀进程）
  *
  * 【问题原理】
- * Bitmap 是 Android 中内存占用最大的对象之一。
- * 4096x4096 ARGB_8888 = 64MB。循环创建多张会导致 OOM。
+ * Bitmap.createBitmap() 分配在 Native 堆而非 Java 堆。
+ * 循环创建大 Bitmap（4096x4096 ARGB_8888 = 64MB/张）会快速耗尽 Native 堆，
+ * 触发 Low Memory Killer (LMK) 杀进程，产生 SIGKILL 信号，进程无法捕获。
+ *
+ * 注意：这里不会抛出 Java OutOfMemoryError，而是进程直接被系统杀掉。
  *
  * 【修复方案】
- * 1. 使用 inSampleSize 压缩图片尺寸
- * 2. 使用完成后及时 recycle()
- * 3. 加载前检查可用内存
+ * 1. 使用 inSampleSize 压缩图片尺寸（如 1024x1024 = 4MB）
+ * 2. 加载前检查 Native 可用内存
+ * 3. 及时 recycle() 释放 Bitmap
  */
 @Composable
-fun BitmapOomScreen(onBack: () -> Unit) {
+fun BitmapNativeMemoryScreen(onBack: () -> Unit) {
     val scenario = remember { ScenarioRegistry.getScenarioById("oom_bitmap") !! }
     var fixEnabled by remember { mutableStateOf(false) }
     var memorySnapshot by remember { mutableStateOf(getMemorySnapshot()) }
@@ -60,7 +64,7 @@ fun BitmapOomScreen(onBack: () -> Unit) {
         title = scenario.title,
         description = scenario.description,
         dangerLevel = scenario.dangerLevel,
-        categoryColor = OomRed,
+        categoryColor = NativeMemoryBlue,
         explanationText = scenario.explanationText,
         investigationMethod = scenario.investigationMethod,
         fixDescription = scenario.fixDescription,
@@ -71,7 +75,15 @@ fun BitmapOomScreen(onBack: () -> Unit) {
             bitmapList.clear()
             onBack()
         },
-        memoryInfo = { MemoryInfoBar(memorySnapshot.used, memorySnapshot.max, memorySnapshot.free) },
+        memoryInfo = {
+            MemoryInfoBar(
+                javaUsed = memorySnapshot.javaUsed,
+                javaMax = memorySnapshot.javaMax,
+                javaFree = memorySnapshot.javaFree,
+                nativeAllocated = memorySnapshot.nativeAllocated,
+                nativeSize = memorySnapshot.nativeSize
+            )
+        },
         actionButtons = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -81,7 +93,7 @@ fun BitmapOomScreen(onBack: () -> Unit) {
                     onClick = {
                         if (fixEnabled) {
                             val newMemory = getMemorySnapshot()
-                            val freeMem = newMemory.free
+                            val freeMem = newMemory.javaFree
                             if (freeMem < 50L * 1024 * 1024) {
                                 bitmapList.forEach { if (!it.isRecycled) it.recycle() }
                                 bitmapList.clear()
@@ -93,8 +105,13 @@ fun BitmapOomScreen(onBack: () -> Unit) {
                             bitmapCount = bitmapList.size
                         } else {
                             try {
-                                val bitmap = Bitmap.createBitmap(4096, 4096, Bitmap.Config.ARGB_8888)
-                                bitmapList.add(bitmap)
+                                // 一次创建 20 个 4096x4096 Bitmap，每个约 64MB
+                                // 合计约 1.28GB，保证触发 LMK 杀进程
+                                repeat(20) {
+                                    val bitmap = Bitmap.createBitmap(4096, 4096, Bitmap.Config.ARGB_8888)
+                                    bitmap.eraseColor(android.graphics.Color.rgb(Random.nextInt(256), Random.nextInt(256), Random.nextInt(256)))
+                                    bitmapList.add(bitmap)
+                                }
                                 bitmapCount = bitmapList.size
                             } catch (e: OutOfMemoryError) {
                                 bitmapCount = -1
@@ -104,12 +121,12 @@ fun BitmapOomScreen(onBack: () -> Unit) {
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = OomRed,
-                        disabledContainerColor = OomRed.copy(alpha = 0.3f)
+                        containerColor = NativeMemoryBlue,
+                        disabledContainerColor = NativeMemoryBlue.copy(alpha = 0.3f)
                     )
                 ) {
                     Text(
-                        text = if (fixEnabled) "🔧 修复版本 - 加载小图 (4MB)" else "⚠️ 触发 OOM（创建大图 64MB）",
+                        text = if (fixEnabled) "🔧 修复版本 - 加载小图 (4MB)" else "⚠️ 触发 Native 内存压力（≈ 1.28GB）",
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -133,7 +150,7 @@ fun BitmapOomScreen(onBack: () -> Unit) {
                 }
 
                 val statusText = if (bitmapCount < 0) {
-                    "💥 OOM 已触发！"
+                    "💥 内存压力已触发！"
                 } else {
                     "已创建 Bitmap: $bitmapCount 张"
                 }
@@ -141,22 +158,22 @@ fun BitmapOomScreen(onBack: () -> Unit) {
                 Text(
                     text = statusText,
                     style = androidx.compose.ui.text.TextStyle(
-                        color = if (bitmapCount < 0) Color.Red else if (fixEnabled) Color(0xFF388E3C) else OomRed.copy(alpha = 0.7f),
+                        color = if (bitmapCount < 0) Color.Red else if (fixEnabled) Color(0xFF388E3C) else NativeMemoryBlue.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
                 )
 
                 if (!fixEnabled) {
                     Text(
-                        text = "⚠️ 4-8 张即可触发 OOM，注意保存数据",
+                        text = "⚠️ Native 内存耗尽时进程会被 LMK 杀掉（SIGKILL，无法捕获）",
                         style = androidx.compose.ui.text.TextStyle(
-                            color = OomRed.copy(alpha = 0.7f),
+                            color = NativeMemoryBlue.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
                     )
                 } else {
                     Text(
-                        text = "✅ inSampleSize=4 + 内存检查，安全",
+                        text = "✅ inSampleSize 压缩 + 内存检查，安全",
                         style = androidx.compose.ui.text.TextStyle(
                             color = Color(0xFF388E3C),
                             fontSize = 12.sp

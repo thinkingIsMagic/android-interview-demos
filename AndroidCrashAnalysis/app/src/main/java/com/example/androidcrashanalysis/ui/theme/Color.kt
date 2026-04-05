@@ -32,6 +32,12 @@ val NativePurpleDark = Color(0xFF4A148C)
 val NativePurpleBackground = Color(0xFFF8F0FF)
 val NativePurpleContainer = Color(0xFFE1BEE7)
 
+// === Native 内存模块 - 蓝色系 ===
+val NativeMemoryBlue = Color(0xFF1976D2)
+val NativeMemoryBlueLight = Color(0xFF64B5F6)
+val NativeMemoryBlueBackground = Color(0xFFF0F7FF)
+val NativeMemoryBlueContainer = Color(0xFFBBDEFB)
+
 // === 危险等级颜色 ===
 val DangerCritical = Color(0xFFB71C1C)
 val DangerHigh = Color(0xFFD84315)

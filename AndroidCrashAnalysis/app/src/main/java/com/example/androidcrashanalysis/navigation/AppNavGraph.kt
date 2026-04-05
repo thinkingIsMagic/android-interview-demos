@@ -15,7 +15,7 @@ import com.example.androidcrashanalysis.ui.home.HomeScreen
 import com.example.androidcrashanalysis.ui.nativecrash.BufferOverflowScreen
 import com.example.androidcrashanalysis.ui.nativecrash.NullPointerScreen
 import com.example.androidcrashanalysis.ui.nativecrash.UseAfterFreeScreen
-import com.example.androidcrashanalysis.ui.oom.BitmapOomScreen
+import com.example.androidcrashanalysis.ui.nativememory.BitmapNativeMemoryScreen
 import com.example.androidcrashanalysis.ui.oom.CollectionLeakScreen
 import com.example.androidcrashanalysis.ui.oom.HandlerLeakScreen
 import com.example.androidcrashanalysis.ui.oom.StaticReferenceLeakScreen
@@ -71,7 +71,7 @@ private fun ScenarioDetailRouter(
         "oom_static_ref" -> StaticReferenceLeakScreen(onBack = onBack)
         "oom_handler_leak" -> HandlerLeakScreen(onBack = onBack)
         "oom_unregistered_listener" -> UnregisteredListenerScreen(onBack = onBack)
-        "oom_bitmap" -> BitmapOomScreen(onBack = onBack)
+        "oom_bitmap" -> BitmapNativeMemoryScreen(onBack = onBack)
         "oom_collection" -> CollectionLeakScreen(onBack = onBack)
 
         // ===== ANR 场景 =====

@@ -37,6 +37,8 @@ import com.example.androidcrashanalysis.model.ScenarioCategory
 import com.example.androidcrashanalysis.model.ScenarioRegistry
 import com.example.androidcrashanalysis.ui.theme.AnrOrange
 import com.example.androidcrashanalysis.ui.theme.AnrOrangeBackground
+import com.example.androidcrashanalysis.ui.theme.NativeMemoryBlue
+import com.example.androidcrashanalysis.ui.theme.NativeMemoryBlueBackground
 import com.example.androidcrashanalysis.ui.theme.NativePurple
 import com.example.androidcrashanalysis.ui.theme.NativePurpleBackground
 import com.example.androidcrashanalysis.ui.theme.OomRed
@@ -146,6 +148,7 @@ private fun CategoryHeader(category: ScenarioCategory) {
         ScenarioCategory.OOM -> Triple("💥", OomRedBackground, OomRed)
         ScenarioCategory.ANR -> Triple("⏳", AnrOrangeBackground, AnrOrange)
         ScenarioCategory.NATIVE_CRASH -> Triple("⚡", NativePurpleBackground, NativePurple)
+        ScenarioCategory.NATIVE_MEMORY -> Triple("🧠", NativeMemoryBlueBackground, NativeMemoryBlue)
     }
 
     Row(
@@ -172,15 +175,17 @@ private fun CategoryHeader(category: ScenarioCategory) {
                 color = textColor
             )
             val count = when (category) {
-                ScenarioCategory.OOM -> 5
+                ScenarioCategory.OOM -> 4
                 ScenarioCategory.ANR -> 4
                 ScenarioCategory.NATIVE_CRASH -> 3
+                ScenarioCategory.NATIVE_MEMORY -> 1
             }
             Text(
                 text = when (category) {
-                    ScenarioCategory.OOM -> "$count 个场景 - 内存泄漏导致 OOM"
+                    ScenarioCategory.OOM -> "$count 个场景 - Java 堆内存泄漏导致 OOM"
                     ScenarioCategory.ANR -> "$count 个场景 - 主线程阻塞导致无响应"
                     ScenarioCategory.NATIVE_CRASH -> "$count 个场景 - C++ 层崩溃"
+                    ScenarioCategory.NATIVE_MEMORY -> "$count 个场景 - Native 堆压力触发 LMK"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

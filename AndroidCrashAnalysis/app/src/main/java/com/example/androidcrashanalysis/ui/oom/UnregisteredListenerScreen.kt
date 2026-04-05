@@ -94,7 +94,15 @@ fun UnregisteredListenerScreen(onBack: () -> Unit) {
         fixEnabled = fixEnabled,
         onFixToggle = { fixEnabled = it },
         onBack = onBack,
-        memoryInfo = { MemoryInfoBar(memorySnapshot.used, memorySnapshot.max, memorySnapshot.free) },
+        memoryInfo = {
+            MemoryInfoBar(
+                javaUsed = memorySnapshot.javaUsed,
+                javaMax = memorySnapshot.javaMax,
+                javaFree = memorySnapshot.javaFree,
+                nativeAllocated = memorySnapshot.nativeAllocated,
+                nativeSize = memorySnapshot.nativeSize
+            )
+        },
         actionButtons = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
