@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 加载中占位图:浅灰方块。Glide 的 .placeholder(...) 可以引用它。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFDDDDDD" />
+</shape>

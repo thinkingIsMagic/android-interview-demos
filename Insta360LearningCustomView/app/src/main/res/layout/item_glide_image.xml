@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RecyclerView 的列表项:一个 100x100 的图片格子。 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="4dp">
+
+    <ImageView
+        android:id="@+id/ivItem"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:background="@color/timeline_bg"
+        android:scaleType="centerCrop"
+        android:contentDescription="列表图片" />
+
+</FrameLayout>

@@ -1,9 +1,11 @@
 package com.example.insta360learningcustomview
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.example.insta360learningcustomview.data.TimelineDataFactory
 import com.example.insta360learningcustomview.databinding.ActivityMainBinding
+import com.example.insta360learningcustomview.glide.GlideDemoActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,5 +20,9 @@ class MainActivity : AppCompatActivity() {
         // 真正怎么用这份数据（measure 出多宽、onDraw 怎么画）由 TimelineView 内部实现。
         val clip = TimelineDataFactory.createFakeClip(durationMs = 60_000L)
         binding.timelineView.setData(clip)
+
+        binding.btnGlideDemo.setOnClickListener {
+            startActivity(Intent(this, GlideDemoActivity::class.java))
+        }
     }
 }
