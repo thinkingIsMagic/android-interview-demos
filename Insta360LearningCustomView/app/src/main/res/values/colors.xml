@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- 时间轴控件绘制区域背景：浅灰，方便观察自定义 View 的边界 -->
+    <color name="timeline_bg">#FFEEEEEE</color>
+</resources>

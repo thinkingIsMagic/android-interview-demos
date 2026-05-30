@@ -143,6 +143,14 @@ object Demo01_Basics {
             else -> "other" // 必须（除非覆盖所有情况）
         }
         println("  when 结果: $result")
+
+        val y = 2
+        val result2 = when(y){
+            1 -> "one"
+            2 -> "two"
+            else -> "other"
+        }
+        print(result2);
         
         // 多条件合并
         val day = 3

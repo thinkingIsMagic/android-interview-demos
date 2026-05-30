@@ -1,5 +1,10 @@
 package demo
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.lang.Thread.sleep
+
 /**
  * Kotlin 协程核心演示
  * 
@@ -176,11 +181,12 @@ object Demo05_Coroutines {
             
             val deferred1 = kotlinx.coroutines.async {
                 kotlinx.coroutines.delay(100)
+                sleep(1000)
                 1 + 1
             }
             
             val deferred2 = kotlinx.coroutines.async {
-                kotlinx.coroutines.delay(200)
+                delay(200)
                 2 + 2
             }
             
@@ -211,7 +217,7 @@ object Demo05_Coroutines {
         
         kotlinx.coroutines.runBlocking {
             // 启动长任务
-            val job = kotlinx.coroutines.launch {
+            val job = launch {
                 try {
                     repeat(10) { i ->
                         kotlinx.coroutines.delay(100)

@@ -93,6 +93,8 @@ object Demo02_Functions {
         inlineFun("hello") { name ->
             println("  内联中: $name")
         }
+
+        inlineFun("hello2", {name -> name+2})
         
         // reified 泛型演示
         println("  Int 类型: ${getTypeName<Int>()}")
